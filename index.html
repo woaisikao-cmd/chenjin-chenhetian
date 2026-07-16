@@ -1,0 +1,3561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>陈河田 · CH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<!-- 小白讲解：preload 让浏览器一打开就提前下载关键资源，不用等 JS 解析到才下载。
+     as="fetch" 预加载基础配置 JSON。
+     crossorigin 必须加，否则 fetch 类型的 preload 会被浏览器忽略。
+     注意：首页 hero 背景图不在这里写死（后台可随时更换图片/换成视频），
+       改由下方脚本读取 data/site.json 的 hero.bgImage 动态注入 preload，避免预载到已删除的旧图。 -->
+<link rel="preload" as="fetch" href="data/site.json" crossorigin>
+<script src="images/responsive-manifest.js"></script>
+<script>
+/* 动态预加载首页 hero 背景图
+   小白讲解：在最前面就抢先 fetch site.json（浏览器会命中上面 preload 的同一请求，不会重复下载），
+     解析出 hero.bgImage 后立刻插入一个 <link rel="preload" as="image">，让 hero 图尽早开始下载。
+     只有 bgType 为图片（或未设置）时才预载图片；视频背景则不预载（视频用 preload=metadata 按需加载）。 */
+(function(){
+  try {
+    fetch('data/site.json', { priority: 'high' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var hero = (d && d.hero) || {};
+        var bgType = hero.bgType || 'image';
+        if (bgType !== 'video' && hero.bgImage) {
+          var l = document.createElement('link');
+          l.rel = 'preload';
+          l.as = 'image';
+          l.href = hero.bgImage;
+          document.head.appendChild(l);
+        }
+      })
+      .catch(function(){ /* 静默失败：拿不到就不预载，主流程照常 */ });
+  } catch (e) {}
+})();
+</script>
+<style>
+/* ============================================================
+   基础：重置 + CSS 变量
+   小白讲解：CSS 变量就像"颜色字典"，后面用 var(--gold) 就能拿到金色，
+     改主题色只需要改这里一处，全站跟着变。
+   ============================================================ */
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#FFFFFF;
+  --paper:#FFFFFF;
+  --paper-2:#FBFBFC;
+  --paper-3:#F1F1F3;
+  --ink:#0B0B0D;
+  --muted:#6B7280;
+  --gold:#2563EB;
+  --gold-soft:#3B82F6;
+  --gold-dim:#64748B;
+  --line:rgba(9,9,11,.14);
+  --line-soft:rgba(9,9,11,.08);
+  --serif-cn:"Noto Serif SC",serif;
+  --serif-en:"Cormorant Garamond",serif;
+  --sans:"Inter","Noto Sans SC",sans-serif;
+  --display:"Cormorant Garamond","Noto Serif SC",serif;
+  --topbar-h:62px;
+  --bar-h:96px;
+  --bar-gap:16px;
+  --shadow-soft:0 10px 34px rgba(9,9,11,.10);
+  --shadow-card:0 16px 44px rgba(9,9,11,.16);
+}
+html,body{height:100%;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+.stage{
+  position:relative;
+  width:100%;
+  max-width:440px;
+  margin:0 auto;
+  height:100vh;
+  background:var(--paper);
+  overflow:hidden;
+  box-shadow:0 0 80px rgba(9,9,11,.16);
+}
+.bg-layer{position:absolute;inset:0;z-index:0;background:radial-gradient(120% 90% at 50% 0%,#FBFBFC 0%,#FFFFFF 55%,#F1F1F3 100%);}
+
+/* ============================================================
+   顶栏（所有视图共享，固定在顶部）
+   小白讲解：顶栏背景必须全程不透明，否则滚动时下方图片/视频封面会
+     "透"到顶栏里来。参考 video.html / about.html / contact.html 的做法，
+     用 0.98 透明度的实色背景 + 高斯模糊，既保留质感又不漏图。
+   ============================================================ */
+.topbar{
+  position:fixed;top:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:440px;z-index:120;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;padding-top:calc(14px + env(safe-area-inset-top));
+  background:linear-gradient(180deg,rgba(255,255,255,.92) 0%,rgba(255,255,255,.86) 100%);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--paper);
+}
+.burger{width:34px;height:34px;border:none;background:transparent;cursor:pointer;flex:0 0 auto;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;position:relative;z-index:130;}
+.burger span{display:block;width:22px;height:1.5px;background:var(--ink);transition:transform .4s ease,opacity .3s ease;transform-origin:center;}
+.burger.open span:nth-child(1){transform:translateY(6.5px) rotate(45deg);}
+.burger.open span:nth-child(2){opacity:0;}
+.burger.open span:nth-child(3){transform:translateY(-6.5px) rotate(-45deg);}
+.top-right{display:flex;align-items:center;gap:12px;flex:0 0 auto;}
+.artist-name{font-family:var(--serif-cn);font-size:17px;font-weight:700;letter-spacing:.2em;color:var(--ink);}
+.lang-btn{height:28px;padding:0 12px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--gold);font-family:var(--serif-en);font-style:italic;font-size:12px;font-weight:600;letter-spacing:.18em;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .3s,color .3s;white-space:nowrap;}
+.lang-btn:active{background:var(--ink);color:var(--paper);}
+
+/* ============================================================
+   汉堡菜单卡片（下滑展开）
+   ============================================================ */
+.menu-card{
+  position:fixed;top:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:440px;z-index:115;
+  padding:62px 18px 22px;
+  background:linear-gradient(180deg,rgba(255,255,255,.98) 0%,rgba(255,255,255,.94) 80%,rgba(255,255,255,0) 100%);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  clip-path:inset(0 0 100% 0);transition:clip-path .55s cubic-bezier(.7,0,.2,1);
+}
+.menu-card.open{clip-path:inset(0 0 0 0);}
+.menu-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:6px;}
+.menu-grid a{background:rgba(255,255,255,.92);text-decoration:none;color:var(--ink);padding:22px 6px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;transition:background .3s,color .3s;position:relative;cursor:pointer;}
+.menu-grid a:active,.menu-grid a.on{background:var(--ink);color:var(--paper);}
+.menu-grid a .cn{font-size:16px;font-weight:400;letter-spacing:.18em;}
+.menu-grid a .en{font-family:var(--serif-en);font-size:11px;letter-spacing:.2em;color:var(--gold-dim);text-transform:uppercase;}
+.menu-grid a:active .en,.menu-grid a.on .en{color:var(--paper);}
+.menu-hint{text-align:center;margin-top:14px;font-family:var(--serif-en);font-size:11px;letter-spacing:.3em;color:var(--gold-dim);text-transform:uppercase;}
+
+/* ============================================================
+   语言卡片（下滑展开，7 种语言）
+   ============================================================ */
+.lang-card{
+  position:fixed;top:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:440px;z-index:118;
+  padding:62px 18px 24px;
+  background:linear-gradient(180deg,rgba(255,255,255,.98) 0%,rgba(255,255,255,.94) 80%,rgba(255,255,255,0) 100%);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  clip-path:inset(0 0 100% 0);transition:clip-path .55s cubic-bezier(.7,0,.2,1);
+  max-height:100vh;overflow-y:auto;
+}
+.lang-card.open{clip-path:inset(0 0 0 0);}
+.lang-list{border-top:none;}
+.lang-item{display:flex;align-items:center;gap:16px;padding:16px 4px;cursor:pointer;border-bottom:1px solid rgba(37,99,235,.12);transition:background .25s,padding-left .25s;}
+.lang-item:last-child{border-bottom:none;}
+.lang-item:active{background:rgba(37,99,235,.1);padding-left:12px;}
+.lang-item .flag{font-size:24px;line-height:1;}
+.lang-item .name{font-size:16px;letter-spacing:.12em;color:var(--ink);flex:1;}
+.lang-item.active .name{color:var(--gold);}
+.lang-item .tick{color:var(--gold);font-size:14px;opacity:0;}
+.lang-item.active .tick{opacity:1;}
+.lang-hint{text-align:center;margin-top:16px;font-family:var(--serif-en);font-size:11px;letter-spacing:.3em;color:var(--gold-dim);text-transform:uppercase;}
+
+/* ============================================================
+   门打开动效（仅首次访问播放一次）
+   ============================================================ */
+.doors{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.doors::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(circle at 50% 50%,rgba(37,99,235,.06),transparent 55%),var(--bg);}
+.doors.gone{display:none;}
+.door-stage{display:flex;flex-direction:column;align-items:center;gap:20px;}
+.door-frame{position:relative;width:148px;height:228px;display:flex;perspective:1000px;border:1px solid var(--line);box-shadow:0 0 50px rgba(9,9,11,.12),0 0 0 1px rgba(37,99,235,.08);background:#0a0908;}
+.door{position:relative;width:50%;height:100%;background:linear-gradient(125deg,#221d16 0%,#100d0a 50%,#1b1610 100%);box-shadow:inset 0 0 40px rgba(9,9,11,.13);transform-style:preserve-3d;transition:transform .7s cubic-bezier(.7,0,.2,1);}
+.door-left{transform-origin:left center;}
+.door-right{transform-origin:right center;}
+.door-left::after,.door-right::after{content:"";position:absolute;top:0;bottom:0;width:1.5px;background:linear-gradient(180deg,transparent,var(--gold) 20%,var(--gold) 80%,transparent);box-shadow:0 0 12px rgba(37,99,235,.5);}
+.door-left::after{right:0;}
+.door-right::after{left:0;}
+.door-panel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
+.door-cn{font-family:var(--serif-cn);font-weight:300;font-size:48px;color:var(--gold);text-shadow:0 0 18px rgba(37,99,235,.35);line-height:1;}
+.door-left .door-cn{padding-right:6px;}
+.door-right .door-cn{padding-left:6px;}
+.door-handle{position:absolute;top:50%;width:5px;height:5px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px rgba(37,99,235,.6);}
+.door-left .door-handle{right:9px;transform:translateY(-50%);}
+.door-right .door-handle{left:9px;transform:translateY(-50%);}
+.door-label{font-family:var(--serif-en);font-style:italic;font-size:13px;letter-spacing:.45em;color:var(--gold-dim);text-transform:uppercase;transition:opacity .35s ease;}
+.doors.open .door-left{transform:translateX(-120%) rotateY(-30deg);}
+.doors.open .door-right{transform:translateX(120%) rotateY(30deg);}
+.doors.open .door-label{opacity:0;}
+.doors.fade{transition:opacity .45s ease;opacity:0;}
+
+/* ============================================================
+   视图切换：所有视图共享 .view 容器，.active 控制显示
+   小白讲解：6 个视图都用 .view 类，默认隐藏(display:none)，
+     当前路由对应的视图加 .active 类显示出来。
+   ============================================================ */
+.view{display:none;position:absolute;inset:0;z-index:10;}
+/* 小白讲解：页面切换动效。给 .view.active 加上淡入+轻微上浮的动画，
+   切换页面时不再生硬地"啪"一下出现，而是优雅淡入。
+   照抄 some.html 的 pageFadeIn 思路，时长 0.5s 适配移动端。 */
+.view.active{display:block;animation:viewFadeIn .5s cubic-bezier(.22,1,.36,1) both;}
+@keyframes viewFadeIn{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:none;}}
+
+/* ============================================================
+   图片加载淡入 + 骨架屏占位（照抄 some.html 思路）
+   小白讲解：图片没加载完时 <img> 是透明的(opacity:0)，外层容器显示
+     灰色背景+微光流动动画(骨架屏)。图片下载完成触发 onload 加 .loaded
+     类，<img> 变成 opacity:1 过渡淡入。下载失败 onerror 隐藏父容器。
+   ============================================================ */
+.img-wrap{background:linear-gradient(110deg,#E5E5EA 30%,#F1F1F3 50%,#E5E5EA 70%);background-size:200% 100%;animation:skeletonShimmer 1.5s infinite linear;}
+@keyframes skeletonShimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+.img-fade{opacity:0;transition:opacity .6s ease;}
+.img-fade.loaded{opacity:1;}
+.img-fade.is-error{display:none;}
+
+/* ============================================================
+   HOME 视图（首页 / hero）
+   小白讲解：首页背景根据 bgType 渲染图片或视频，
+     标题文字用 SVG 描边动画一笔一划写出来。
+   ============================================================ */
+.hero{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;opacity:0;transform:translateY(-26px);transition:opacity 1s ease,transform 1s cubic-bezier(.2,.8,.2,1);}
+.hero.reveal-content{opacity:1;transform:none;}
+.art-fallback{position:absolute;inset:0;z-index:1;background:radial-gradient(circle at 30% 40%,rgba(37,99,235,.22),transparent 45%),radial-gradient(circle at 70% 65%,rgba(9,9,11,.45),transparent 55%),linear-gradient(160deg,#16181d 0%,#0b0b0d 100%);animation:drift 18s ease-in-out infinite alternate;}
+@keyframes drift{0%{filter:hue-rotate(0deg) brightness(1);transform:scale(1);}100%{filter:hue-rotate(12deg) brightness(1.08);transform:scale(1.06);}}
+@keyframes heroZoom{0%{transform:scale(1);}100%{transform:scale(1.13);}}
+.hero-lqip{position:absolute;inset:0;z-index:2;background-size:cover;background-position:center;filter:blur(16px);transform:scale(1.08);opacity:0;transition:opacity .6s ease;pointer-events:none;}
+.hero-bg-img{position:absolute;inset:0;z-index:3;width:100%;height:100%;object-fit:cover;pointer-events:none;transform-origin:center;animation:heroZoom 18s ease-in-out infinite alternate;opacity:0;transition:opacity .6s ease;}
+.hero-video{position:absolute;inset:0;z-index:3;width:100%;height:100%;object-fit:cover;pointer-events:none;transform-origin:center;animation:heroZoom 18s ease-in-out infinite alternate;}
+.hero-veil{position:absolute;inset:0;z-index:4;background:linear-gradient(180deg,rgba(9,9,11,.46) 0%,rgba(9,9,11,.36) 36%,rgba(9,9,11,.42) 64%,rgba(9,9,11,.68) 100%);}
+.work-title{position:relative;z-index:5;text-align:center;padding:0 24px;}
+.work-title .cn svg{display:block;margin:0 auto;overflow:visible;}
+.work-title .cn text{font-family:var(--serif-cn);font-weight:700;fill:#fff;stroke:#fff;stroke-width:.6;paint-order:stroke fill;letter-spacing:.14em;}
+.work-title .manifesto{display:block;margin:22px auto 0;max-width:290px;font-family:var(--serif-cn);font-size:13px;line-height:2;letter-spacing:.1em;color:#fff;text-align:center;opacity:0;transform:translateY(8px);transition:opacity .9s ease .2s,transform .9s ease .2s;}
+.work-title.shown .manifesto{opacity:.92;transform:translateY(0);}
+.hero-actions{position:relative;z-index:5;display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:34px;opacity:0;transform:translateY(10px);transition:opacity .9s ease .5s,transform .9s ease .5s;}
+.hero.show-actions .hero-actions{opacity:1;transform:translateY(0);}
+.hero-btn{display:block;width:auto;min-width:208px;max-width:86vw;text-align:center;padding:11px 20px;border:1px solid rgba(255,255,255,.5);color:#fff;text-decoration:none;font-family:var(--serif-cn);font-size:14px;letter-spacing:.16em;line-height:1.35;white-space:normal;word-break:break-word;background:rgba(255,255,255,.06);cursor:pointer;transition:background .3s,color .3s,border-color .3s;}
+.hero-btn:active{background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.7);}
+.hero-btn.primary{border-color:#fff;color:var(--ink);background:#fff;}
+.hero-btn.primary:active{background:rgba(255,255,255,.82);color:var(--ink);}
+.scroll-cue{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);z-index:5;font-family:var(--serif-en);font-size:10px;letter-spacing:.35em;color:rgba(255,255,255,.7);text-transform:uppercase;writing-mode:vertical-rl;opacity:0;transition:opacity .8s ease 1.4s;}
+.hero.show-cue .scroll-cue{opacity:.8;}
+.scroll-cue::after{content:"";display:block;width:1px;height:34px;margin:10px auto 0;background:linear-gradient(rgba(255,255,255,.85),transparent);animation:cue 2.2s ease-in-out infinite;}
+@keyframes cue{0%,100%{opacity:.3;transform:scaleY(.6);}50%{opacity:1;transform:scaleY(1);}}
+
+/* ============================================================
+   WORKS 视图（作品集）—— 完全照搬 ceshi/works.html 样式
+   小白讲解：系列标签栏吸顶横滑，作品卡片整幅 scroll-snap 切换，
+     画框按图片原比例展示，点击弹出详情 overlay。
+   ============================================================ */
+.series-bar{position:fixed;top:var(--topbar-h);left:50%;transform:translateX(-50%);width:100%;max-width:440px;z-index:30;padding:14px 24px 16px;opacity:0;transform:translateX(-50%) translateY(-10px);transition:opacity .6s ease .25s,transform .6s ease .25s;}
+body.page-in .series-bar{opacity:1;transform:translateX(-50%) translateY(0);}
+.series-track{display:flex;flex-direction:row;flex-wrap:nowrap;gap:8px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;padding:0;scrollbar-width:none;}
+.series-track::-webkit-scrollbar{display:none;}
+.series-tag{flex:0 0 auto;scroll-snap-align:start;white-space:nowrap;height:28px;padding:0 13px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--muted);font-family:var(--serif-cn);font-size:11px;letter-spacing:.06em;cursor:pointer;transition:background .3s,color .3s,border-color .3s;}
+.series-tag.active,.series-tag:active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.works-page{position:relative;z-index:2;width:100%;max-width:440px;margin:0 auto;height:100vh;overflow-y:scroll;scroll-snap-type:y mandatory;scroll-padding-top:calc(var(--topbar-h) + var(--bar-h) + var(--bar-gap));padding-top:calc(var(--topbar-h) + var(--bar-h) + var(--bar-gap));-webkit-overflow-scrolling:touch;}
+.works-page::-webkit-scrollbar{display:none;}
+.works-page{scrollbar-width:none;}
+.work-section{position:relative;height:calc(100vh - var(--topbar-h) - var(--bar-gap) - var(--bar-h));scroll-snap-align:start;scroll-snap-stop:always;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:20px;padding:19px 24px 24px;}
+.work-section.hidden{display:none;}
+.work-section .work-frame,.work-section .work-name{position:relative;z-index:2;opacity:0;transform:translateY(30px) scale(.94);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.8,.2,1);}
+.work-section.active .work-frame{opacity:1;transform:none;transition-delay:.05s;}
+.work-section.active .work-name{opacity:1;transform:none;transition-delay:.2s;}
+@keyframes workEnter{from{opacity:0;transform:translateY(36px) scale(.94);}to{opacity:1;transform:none;}}
+.work-section.entering .work-frame{animation:workEnter .72s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--enter-d,0s);}
+.work-section.entering .work-name{animation:workEnter .72s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--enter-d,0s) + .12s);}
+.work-frame{position:relative;cursor:pointer;padding:8px;background:linear-gradient(145deg,#FBFBFC,#F1F1F3);border:1px solid var(--line);box-shadow:0 18px 50px rgba(9,9,11,.16),inset 0 0 0 1px rgba(37,99,235,.15);transition:transform .4s ease;width:fit-content;max-width:100%;margin:0 auto;}
+.work-frame:active{transform:scale(.98);}
+.work-frame::before{content:"";position:absolute;inset:4px;border:1px solid rgba(37,99,235,.25);pointer-events:none;}
+.work-frame img{display:block;max-height:calc(100vh - var(--topbar-h) - var(--bar-h) - 170px);max-width:78vw;width:auto;height:auto;object-fit:contain;}
+.work-frame .zoom-hint{position:absolute;bottom:14px;right:14px;width:26px;height:26px;border-radius:50%;background:rgba(37,99,235,.18);border:1px solid var(--line);color:var(--ink);font-size:14px;display:flex;align-items:center;justify-content:center;}
+.work-name{font-family:var(--serif-cn);font-weight:700;font-size:20px;letter-spacing:.2em;color:var(--ink);text-align:center;text-shadow:none;}
+.empty-state{height:calc(100vh - var(--topbar-h) - var(--bar-gap) - var(--bar-h));display:flex;align-items:center;justify-content:center;text-align:center;color:var(--gold-dim);font-size:14px;letter-spacing:.2em;padding:0 20px;text-shadow:none;scroll-snap-align:start;}
+
+/* 作品详情 overlay */
+.detail-overlay{position:fixed;inset:0;z-index:200;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);overflow-y:auto;-webkit-overflow-scrolling:touch;opacity:0;pointer-events:none;transition:opacity .4s ease;}
+.detail-overlay.show{opacity:1;pointer-events:auto;}
+.detail-close{position:fixed;top:16px;right:16px;z-index:210;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:rgba(37,99,235,.18);color:var(--gold);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .4s ease,background .3s,color .3s;}
+.detail-close.show{opacity:1;pointer-events:auto;}
+.detail-close:active{background:var(--ink);color:var(--paper);}
+.detail-head{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);width:100%;max-width:440px;margin:0 auto;padding:72px 22px 0;display:flex;flex-direction:column;align-items:center;gap:16px;}
+.detail-divider{width:100%;margin:18px 0 0;}
+.detail-divider::after{content:"";display:block;height:1px;background:var(--line);}
+.detail-body{width:100%;max-width:440px;margin:0 auto;padding:22px 22px 60px;}
+.detail-art{display:flex;justify-content:center;}
+.detail-art .frame{padding:0;background:none;border:none;box-shadow:none;width:fit-content;max-width:100%;margin:0 auto;}
+.detail-art .frame img{display:block;max-height:46vh;max-width:84vw;width:auto;height:auto;object-fit:contain;}
+.detail-name{font-family:var(--serif-cn);font-weight:700;font-size:26px;letter-spacing:.18em;color:var(--ink);text-align:center;}
+/* 工作室照片弹窗的标题（"陈河田工作室"）字号缩小到 80%，避免在大图上显得过大 */
+.detail-name.studio{font-size:20.8px;}
+.detail-status{text-align:center;margin-top:-6px;font-size:12px;letter-spacing:.2em;padding:4px 14px;border-radius:10px;display:inline-block;align-self:center;border:1px solid;}
+.status-collect{color:var(--gold);border-color:var(--line);}
+.status-show{color:#7fd1c0;border-color:#7fd1c0;}
+.status-sold{color:#9a9a9a;border-color:#5a5a5a;text-decoration:line-through;}
+.detail-meta{display:flex;flex-direction:column;gap:12px;}
+.detail-meta>div{display:flex;justify-content:space-between;align-items:baseline;gap:16px;}
+.detail-meta dt{font-family:var(--serif-en);font-size:11px;letter-spacing:.25em;color:var(--gold-dim);text-transform:uppercase;white-space:nowrap;}
+.detail-meta dd{font-family:var(--serif-cn);font-size:14px;color:var(--ink);text-align:right;}
+.detail-desc{font-family:var(--serif-cn);font-size:14px;line-height:2;letter-spacing:.08em;color:var(--ink);opacity:.85;margin-top:18px;border-top:1px solid var(--line);padding-top:20px;}
+/* 作品详情弹窗内的高清大图：文字介绍下方展示，点进弹窗才加载（比列表缩略图清晰，方便看细节） */
+.detail-fullimg{width:100%;max-width:440px;margin:26px auto 0;border-radius:2px;overflow:hidden;position:relative;line-height:0;}
+.detail-fullimg img{width:100%;height:auto;display:block;}
+
+/* ============================================================
+   EXHIBITIONS 视图（展览时间线）—— 照抄 exhibitions.html
+   小白讲解：固定页头（标题+年份标签横滑），卡片式整幅 scroll-snap 切换，
+     每张展览卡片含日期、名称、标签、描述、3 列缩略图网格（点击打开查看器）。
+   ============================================================ */
+.exh-bar{
+  position:fixed;top:var(--topbar-h);left:50%;transform:translateX(-50%);
+  width:100%;max-width:440px;z-index:30;
+  padding:16px 24px 14px;
+  background:linear-gradient(180deg,rgba(255,255,255,.96) 0%,rgba(255,255,255,.94) 100%);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--paper);
+  opacity:0;transform:translateX(-50%) translateY(-10px);
+  transition:opacity .6s ease .25s,transform .6s ease .25s;
+}
+body.page-in .exh-bar{opacity:1;transform:translateX(-50%) translateY(0);}
+.exh-title{display:flex;flex-direction:column;gap:3px;margin-bottom:12px;}
+.exh-title .cn{font-family:var(--serif-cn);font-size:22px;font-weight:700;letter-spacing:.22em;color:var(--ink);text-shadow:none;}
+.exh-title .en{font-family:var(--serif-en);font-size:11px;font-weight:400;letter-spacing:.42em;color:var(--gold-dim);text-transform:uppercase;}
+.exh-track{
+  display:flex;flex-direction:row;flex-wrap:nowrap;gap:8px;
+  overflow-x:auto;overflow-y:hidden;
+  scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;
+  padding:0;scrollbar-width:none;
+}
+.exh-track::-webkit-scrollbar{display:none;}
+.year-tag{
+  flex:0 0 auto;scroll-snap-align:start;white-space:nowrap;
+  height:28px;padding:0 13px;border-radius:14px;
+  border:1px solid var(--line);background:transparent;
+  color:var(--muted);font-family:var(--serif-cn);font-size:11px;letter-spacing:.06em;
+  cursor:pointer;transition:background .3s,color .3s,border-color .3s;
+}
+.year-tag.active,.year-tag:active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.cat-tag{
+  flex:0 0 auto;scroll-snap-align:start;white-space:nowrap;
+  height:28px;padding:0 13px;border-radius:14px;
+  border:1px solid var(--line);background:transparent;
+  color:var(--muted);font-family:var(--serif-cn);font-size:11px;letter-spacing:.06em;
+  cursor:pointer;transition:background .3s,color .3s,border-color .3s;
+}
+.cat-tag.active,.cat-tag:active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.exh-page{
+  position:relative;z-index:2;
+  width:100%;max-width:440px;margin:0 auto;
+  height:100vh;
+  overflow-y:scroll;
+  /* 朋友圈式纵向信息流，不做整屏吸附 */
+  scroll-padding-top:calc(var(--topbar-h) + var(--bar-h) + var(--bar-gap));
+  padding-top:calc(var(--topbar-h) + var(--bar-h) + var(--bar-gap));
+  -webkit-overflow-scrolling:touch;
+}
+.exh-page::-webkit-scrollbar{display:none;}
+.exh-page{scrollbar-width:none;}
+.exh-section{
+  position:relative;max-width:440px;margin:0 auto;
+  scroll-snap-align:start;
+  padding:14px 16px 2px;
+}
+.exh-section.hidden{display:none;}
+.exh-card{
+  width:100%;max-width:360px;
+  display:flex;flex-direction:column;align-items:stretch;gap:14px;text-align:left;
+}
+/* 卡片式滚动入场动效：不控制 opacity，避免向下滑动时上一个卡片变空白。
+   原版 exhibitions.html 用 opacity:0 控制未激活卡片，在内容高度超过视口时
+   会出现空白（因为 IntersectionObserver 55% 阈值永远达不到）。
+   这里改为：未激活卡片也保持可见，只有入场动画时才做淡入上浮。 */
+@keyframes exhEnter{from{opacity:0;transform:translateY(36px) scale(.96);}to{opacity:1;transform:none;}}
+.exh-section.entering .exh-card{animation:exhEnter .8s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--enter-d,0s);}
+.exh-date{font-family:var(--serif-en);font-size:15px;font-weight:600;letter-spacing:.28em;color:var(--gold);}
+.exh-head-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.exh-name{font-family:var(--serif-cn);font-weight:700;font-size:21px;letter-spacing:.14em;color:var(--ink);text-shadow:none;}
+.exh-chip{padding:3px 11px;border-radius:10px;border:1px solid var(--line);color:var(--gold);font-size:11px;letter-spacing:.1em;white-space:nowrap;}
+.exh-desc{font-family:var(--serif-cn);font-size:13px;line-height:1.9;letter-spacing:.04em;color:var(--ink);opacity:.82;}
+.exh-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:2px;}
+.exh-thumb{position:relative;aspect-ratio:1/1;overflow:hidden;border:1px solid var(--line);background:var(--paper-3);cursor:pointer;transition:transform .35s ease,border-color .35s ease;}
+.exh-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.exh-thumb:active{transform:scale(.96);border-color:var(--line);}
+.exh-thumb::after{content:"+";position:absolute;right:6px;bottom:5px;width:20px;height:20px;border-radius:50%;background:rgba(9,9,11,.10);border:1px solid var(--line);color:var(--gold);font-size:12px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .3s;}
+.exh-thumb:active::after{opacity:1;}
+
+/* ============================================================
+   VIDEOS 视图（视频瀑布流）—— 照抄 video.html
+   小白讲解：固定页头（标题+说明+分类标签），2 列瀑布流卡片，
+     圆形播放按钮，点击弹出 iframe 播放弹窗。
+   ============================================================ */
+.video-bar{
+  position:fixed;top:var(--topbar-h);left:50%;transform:translateX(-50%);
+  width:100%;max-width:440px;z-index:30;
+  padding:14px 20px 14px;
+  background:linear-gradient(180deg,rgba(255,255,255,.96) 0%,rgba(255,255,255,.9) 100%);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  opacity:0;transform:translateX(-50%) translateY(-10px);
+  transition:opacity .6s ease .25s,transform .6s ease .25s;
+}
+body.page-in .video-bar{opacity:1;transform:translateX(-50%) translateY(0);}
+.video-title{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+.video-title .cn{font-family:var(--serif-cn);font-size:22px;font-weight:700;letter-spacing:.22em;color:var(--ink);text-shadow:none;}
+.video-title .sub{font-family:var(--serif-cn);font-size:12px;font-weight:300;letter-spacing:.06em;color:var(--gold-dim);line-height:1.5;}
+.video-track{
+  display:flex;flex-direction:row;flex-wrap:nowrap;gap:8px;
+  overflow-x:auto;overflow-y:hidden;
+  scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;
+  padding:0;scrollbar-width:none;
+}
+.video-track::-webkit-scrollbar{display:none;}
+.cat-tag{
+  flex:0 0 auto;scroll-snap-align:start;white-space:nowrap;
+  height:28px;padding:0 14px;border-radius:14px;
+  border:1px solid var(--line);background:rgba(9,9,11,.05);
+  color:var(--ink);font-family:var(--serif-cn);font-size:11px;letter-spacing:.06em;
+  cursor:pointer;transition:background .3s,color .3s,border-color .3s;
+}
+.cat-tag.active,.cat-tag:active{background:var(--ink);color:var(--paper);border-color:var(--line);}
+.video-feed{
+  position:relative;z-index:2;
+  width:100%;max-width:440px;margin:0 auto;height:100vh;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:calc(var(--topbar-h) + var(--bar-h) + 14px) 12px 44px;
+}
+.video-feed::-webkit-scrollbar{display:none;}
+.video-feed{scrollbar-width:none;}
+/* 视频卡片样式已并入 .wg-card（与「作品」页同款双列卡片，仅叠加播放角标 .wg-play） */
+
+/* 视频播放弹窗（play-overlay）—— 照抄 video.html */
+.play-overlay{
+  position:fixed;inset:0;z-index:200;
+  background:rgba(255,255,255,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  display:flex;align-items:center;justify-content:center;
+  padding:60px 16px 40px;
+  opacity:0;pointer-events:none;transition:opacity .4s ease;
+}
+.play-overlay.show{opacity:1;pointer-events:auto;}
+.play-box{
+  width:100%;max-width:404px;display:flex;flex-direction:column;gap:16px;
+  transform:translateY(22px) scale(.98);transition:transform .45s cubic-bezier(.2,.8,.2,1);
+}
+.play-overlay.show .play-box{transform:none;}
+.play-video{width:100%;border-radius:14px;overflow:hidden;background:#000;border:1px solid var(--line);box-shadow:0 20px 60px rgba(9,9,11,.16);}
+.play-video iframe{width:100%;aspect-ratio:16/9;height:auto;display:block;border:0;background:#000;}
+.play-title{font-family:var(--serif-cn);font-size:18px;font-weight:700;letter-spacing:.06em;color:var(--ink);line-height:1.55;}
+.play-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.play-chip{font-size:11px;letter-spacing:.08em;color:var(--gold);border:1px solid var(--line);border-radius:9px;padding:3px 11px;background:rgba(37,99,235,.08);}
+
+/* ============================================================
+   ABOUT 视图（关于）—— 照抄 about.html
+   小白讲解：固定页头（标题+6标签），滚动区有 6 个 section（基本信息/艺术理念/
+     经历/媒体报道/获奖记录/工作室），逐块 reveal 淡入，工作室照片点击打开查看器。
+   ============================================================ */
+.about-bar{
+  position:fixed;top:var(--topbar-h);left:50%;transform:translateX(-50%);
+  width:100%;max-width:440px;z-index:30;
+  padding:14px 20px 16px;
+  background:linear-gradient(180deg,rgba(255,255,255,.96) 0%,rgba(255,255,255,.9) 100%);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  opacity:0;transform:translateX(-50%) translateY(-10px);
+  transition:opacity .6s ease .25s,transform .6s ease .25s;
+}
+/* 小白讲解：原来用 body.page-in 让 about-bar 显示，但现在改成由
+   playAboutEntrance() 用 JS 控制显示——这样每次进入关于页面时，
+   about-bar 都会重新播放滑入动画，而不是只在首次加载时显示一次。 */
+.about-title{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;}
+.about-title .cn{font-family:var(--serif-cn);font-size:22px;font-weight:700;letter-spacing:.22em;color:var(--ink);text-shadow:none;}
+.about-title .sub{font-family:var(--serif-en);font-size:11px;letter-spacing:.34em;color:var(--gold-dim);text-transform:uppercase;}
+.about-tags{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.about-tag{
+  height:32px;border-radius:16px;
+  border:1px solid var(--line);background:rgba(9,9,11,.05);
+  color:var(--ink);font-family:var(--serif-cn);font-size:12px;letter-spacing:.04em;
+  cursor:pointer;transition:background .3s,color .3s,border-color .3s;
+  display:flex;align-items:center;justify-content:center;
+}
+.about-tag.active,.about-tag:active{background:var(--ink);color:var(--paper);border-color:var(--line);}
+.about-feed{
+  position:relative;z-index:2;
+  width:100%;max-width:440px;margin:0 auto;height:100vh;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:calc(var(--topbar-h) + var(--bar-h) + 14px) 22px 60px;
+}
+.about-feed::-webkit-scrollbar{display:none;}
+.about-feed{scrollbar-width:none;}
+.about-section{scroll-margin-top:calc(var(--topbar-h) + var(--bar-h) + 14px);margin-bottom:54px;}
+.about-section:last-child{margin-bottom:20px;}
+.sec-head{
+  font-family:var(--serif-cn);font-size:24px;font-weight:700;letter-spacing:.2em;color:var(--ink);
+  padding-bottom:12px;margin-bottom:22px;position:relative;
+}
+.sec-head::after{content:"";position:absolute;left:0;bottom:0;width:46px;height:2px;background:var(--gold);box-shadow:0 0 10px rgba(37,99,235,.5);}
+.reveal{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.8,.2,1);}
+.reveal.in{opacity:1;transform:none;}
+.portrait{
+  width:100%;max-width:300px;margin:0 auto 26px;
+  border:1px solid var(--line);padding:7px;background:linear-gradient(145deg,#FBFBFC,#F1F1F3);
+  position:relative;
+}
+.portrait img{display:block;width:100%;height:auto;object-fit:cover;aspect-ratio:4/5;}
+.field{margin-bottom:18px;}
+.field .label{font-family:var(--serif-en);font-size:11px;letter-spacing:.28em;color:var(--gold-dim);text-transform:uppercase;margin-bottom:7px;}
+.field .value{font-family:var(--serif-cn);font-size:17px;font-weight:700;letter-spacing:.12em;color:var(--ink);}
+.field .value.sub{font-weight:400;font-size:15px;letter-spacing:.08em;}
+.bio p{font-family:var(--serif-cn);font-size:14.5px;line-height:2;letter-spacing:.06em;color:var(--ink);opacity:.9;margin-bottom:14px;}
+.bio p:last-child{margin-bottom:0;}
+.quote{
+  margin:30px 4px 0;padding:24px 22px;text-align:center;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  background:rgba(37,99,235,.04);
+}
+.quote p{font-family:var(--serif-cn);font-style:italic;font-size:16px;line-height:2.1;letter-spacing:.1em;color:var(--gold);}
+.quote .sign{display:block;margin-top:14px;font-family:var(--serif-cn);font-size:13px;letter-spacing:.18em;color:var(--gold-dim);font-style:normal;}
+/* 引用卡片(.quote)后紧跟的块（如"华为收藏"标题）与其拉开垂直间距，避免文字贴着卡片 */
+.quote + .block{margin-top:30px;}
+.block{margin-bottom:26px;}
+.block:last-child{margin-bottom:0;}
+.block .bt{font-family:var(--serif-cn);font-size:16px;font-weight:700;letter-spacing:.14em;color:var(--gold);margin-bottom:12px;}
+.block p{font-family:var(--serif-cn);font-size:14.5px;line-height:2;letter-spacing:.06em;color:var(--ink);opacity:.9;margin-bottom:14px;}
+.block p:last-child{margin-bottom:0;}
+.timeline{list-style:none;}
+.timeline li{position:relative;padding:0 0 16px 22px;border-left:1px solid var(--line);}
+.timeline li:last-child{padding-bottom:0;}
+.timeline li::before{content:"";position:absolute;left:-4px;top:6px;width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px rgba(37,99,235,.6);}
+.timeline .yr{font-family:var(--serif-en);font-size:13px;letter-spacing:.12em;color:var(--gold-dim);font-weight:600;}
+.timeline .tx{font-family:var(--serif-cn);font-size:14px;line-height:1.7;letter-spacing:.05em;color:var(--ink);opacity:.92;margin-top:2px;}
+.series-chips{display:flex;flex-wrap:wrap;gap:9px;}
+.series-chips span{font-family:var(--serif-cn);font-size:13px;letter-spacing:.05em;color:var(--ink);border:1px solid var(--line);border-radius:20px;padding:7px 14px;background:rgba(37,99,235,.06);}
+.info-card{
+  border:1px solid var(--line);border-radius:14px;padding:18px 18px;
+  background:linear-gradient(145deg,rgba(255,255,255,.85),rgba(241,241,243,.85));
+}
+.info-card p{font-size:14px;line-height:1.95;}
+.award{display:flex;gap:16px;padding:16px 0;border-bottom:1px solid rgba(37,99,235,.14);}
+.award:last-child{border-bottom:none;}
+.award .ay{font-family:var(--serif-en);font-size:18px;font-weight:600;letter-spacing:.1em;color:var(--gold);flex:0 0 56px;}
+.award .at{font-family:var(--serif-cn);font-size:14px;line-height:1.8;letter-spacing:.05em;color:var(--ink);opacity:.92;}
+.cv-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  margin:2px 0 26px;padding:13px 26px;border-radius:26px;
+  border:1px solid var(--line);background:rgba(37,99,235,.08);color:var(--gold);
+  font-family:var(--serif-cn);font-size:14px;letter-spacing:.14em;cursor:pointer;
+  transition:background .3s,color .3s;
+}
+.cv-btn:active{background:var(--ink);color:var(--paper);}
+.studio-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;}
+.studio-grid .ph{aspect-ratio:1/1;overflow:hidden;border:1px solid var(--line);cursor:pointer;position:relative;transition:transform .35s ease,border-color .35s ease;}
+.studio-grid .ph img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .5s ease;}
+.studio-grid .ph:active{transform:scale(.96);border-color:var(--line);}
+.studio-hint{margin-top:10px;font-family:var(--serif-cn);font-size:12px;letter-spacing:.1em;color:var(--gold-dim);display:flex;align-items:center;justify-content:flex-end;gap:5px;}
+.studio-hint .arw{color:var(--gold);}
+
+/* ============================================================
+   CONTACT 视图（联系）—— 照抄 contact.html
+   小白讲解：轮播卡片（一次一张，左右滑动切换），景深聚焦效果，
+     下方商业合作区域，邮箱可一键复制。
+   ============================================================ */
+.contact-page{
+  position:relative;z-index:2;
+  width:100%;max-width:440px;margin:0 auto;height:100vh;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  /* 标题栏固定吸顶后，要给内容区留出顶栏+标题栏的高度，避免被遮 */
+  padding:calc(var(--topbar-h) + 16px) 0 56px;
+}
+.contact-page::-webkit-scrollbar{display:none;}
+.contact-page{scrollbar-width:none;}
+/* 联系页标题栏：固定吸顶 + 实色不透明背景（与 video-bar/about-bar 一致）
+   小白讲解：之前 .contact-head 跟着页面滚动，下方轮播卡片会"透"到标题上。
+     现在改成 position:fixed 钉在顶栏正下方，加 0.98 透明度的实色背景，
+     滚动时不会再透图，标题文字也始终可见。 */
+.contact-head{
+  position:fixed;top:var(--topbar-h);left:50%;transform:translateX(-50%);
+  width:100%;max-width:440px;z-index:30;
+  padding:8px 24px 16px;
+  background:linear-gradient(180deg,rgba(255,255,255,.96) 0%,rgba(255,255,255,.9) 100%);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  opacity:0;transform:translateX(-50%) translateY(-10px);
+  transition:opacity .6s ease .25s,transform .6s ease .25s;
+}
+body.page-in .contact-head{opacity:1;transform:translateX(-50%) translateY(0);}
+.contact-head .cn{font-family:var(--serif-cn);font-size:26px;font-weight:700;letter-spacing:.24em;color:var(--ink);text-shadow:none;}
+.contact-head .en{display:block;margin-top:6px;font-family:var(--serif-en);font-size:12px;letter-spacing:.42em;color:var(--gold-dim);text-transform:uppercase;}
+.contact-section{margin-top:4px;position:relative;}
+.contact-carousel{position:relative;overflow:hidden;padding:4px 0 6px;}
+.contact-track{display:flex;transition:transform .75s cubic-bezier(.22,.61,.36,1);will-change:transform;}
+.contact-track.dragging{transition:none;}
+.contact-slide{
+  flex:0 0 100%;box-sizing:border-box;padding:0 18px;
+  opacity:.38;transform:scale(.86);
+  transition:transform .75s cubic-bezier(.22,.61,.36,1),opacity .62s ease;
+}
+.contact-slide.active{opacity:1;transform:scale(1);}
+.contact-card{
+  width:100%;
+  background:linear-gradient(160deg,#FBFBFC,#F1F1F3);
+  border:1px solid var(--line);border-radius:18px;
+  padding:30px 22px 26px;
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  box-shadow:0 16px 44px rgba(9,9,11,.12);
+  transition:box-shadow .45s ease;
+}
+.contact-slide.active .contact-card{box-shadow:0 22px 56px rgba(0,0,0,.62),0 0 0 1px rgba(37,99,235,.5);}
+.c-icon{width:62px;height:62px;border-radius:50%;border:1px solid var(--line);background:rgba(37,99,235,.08);display:flex;align-items:center;justify-content:center;color:var(--gold);}
+.c-icon svg{width:32px;height:32px;}
+.c-title{margin-top:16px;font-family:var(--serif-cn);font-size:20px;font-weight:700;letter-spacing:.18em;color:var(--ink);}
+.c-sub{margin-top:7px;font-family:var(--serif-cn);font-size:13px;font-weight:300;letter-spacing:.05em;color:var(--gold-dim);}
+.c-media{margin-top:20px;display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;}
+.c-qr{width:150px;height:150px;background:#fff;border-radius:10px;padding:9px;box-shadow:0 8px 22px rgba(9,9,11,.10);}
+.c-qr img{width:100%;height:100%;display:block;}
+.c-note{font-family:var(--serif-cn);font-size:11.5px;letter-spacing:.04em;color:var(--gold-dim);}
+.c-mail{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 0;}
+.c-mail .addr{font-family:var(--serif-en);font-size:19px;letter-spacing:.03em;color:var(--ink);}
+.c-copy{height:34px;padding:0 18px;border-radius:17px;border:1px solid var(--line);background:rgba(37,99,235,.06);color:var(--gold);font-family:var(--serif-cn);font-size:12px;letter-spacing:.1em;cursor:pointer;transition:background .3s,color .3s;}
+.c-copy:active{background:var(--ink);color:var(--paper);}
+.c-link{display:inline-flex;align-items:center;gap:8px;text-decoration:none;height:38px;padding:0 20px;border-radius:19px;border:1px solid var(--line);background:rgba(37,99,235,.08);color:var(--gold);font-family:var(--serif-cn);font-size:13px;letter-spacing:.06em;transition:background .3s,color .3s;}
+.c-link:active{background:var(--ink);color:var(--paper);}
+.contact-dots{display:flex;justify-content:center;gap:8px;margin-top:18px;}
+.contact-dots span{width:7px;height:7px;border-radius:50%;background:rgba(37,99,235,.3);transition:background .3s,width .3s,border-radius .3s;}
+.contact-dots span.on{width:20px;border-radius:4px;background:var(--gold);}
+.swipe-hint{text-align:center;margin-top:12px;font-family:var(--serif-en);font-size:11px;letter-spacing:.3em;color:var(--gold-dim);text-transform:uppercase;}
+.toast{
+  position:fixed;left:50%;bottom:48px;transform:translateX(-50%) translateY(16px);
+  z-index:220;padding:11px 22px;border-radius:22px;
+  background:rgba(20,16,25,.96);border:1px solid var(--line);color:var(--gold);
+  font-family:var(--serif-cn);font-size:13px;letter-spacing:.08em;
+  box-shadow:0 12px 34px rgba(9,9,11,.13);
+  opacity:0;pointer-events:none;transition:opacity .35s ease,transform .35s ease;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.coop{margin-top:36px;padding:0 24px;}
+.coop-head{margin-bottom:18px;}
+.coop-head .cn{font-family:var(--serif-cn);font-size:22px;font-weight:700;letter-spacing:.2em;color:var(--ink);}
+.coop-head .sub{display:block;margin-top:6px;font-family:var(--serif-cn);font-size:13px;font-weight:300;letter-spacing:.06em;color:var(--gold-dim);}
+.coop-grid{display:flex;flex-direction:column;gap:12px;}
+.coop-card{background:rgba(255,255,255,.82);border:1px solid var(--line);border-radius:14px;padding:18px 18px 20px;display:flex;gap:14px;align-items:flex-start;}
+.coop-card .ci{width:38px;height:38px;flex:0 0 auto;border-radius:10px;border:1px solid var(--line);background:rgba(37,99,235,.08);display:flex;align-items:center;justify-content:center;color:var(--gold);}
+.coop-card .ci svg{width:20px;height:20px;}
+.coop-card .ct{font-family:var(--serif-cn);font-size:16px;font-weight:700;letter-spacing:.12em;color:var(--ink);margin-bottom:7px;}
+.coop-card .cd{font-family:var(--serif-cn);font-size:13px;line-height:1.9;letter-spacing:.04em;color:var(--ink);opacity:.82;}
+.coop-quote{margin-top:26px;padding:22px 20px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);text-align:center;}
+.coop-quote .qt{font-family:var(--serif-cn);font-size:16px;line-height:2;letter-spacing:.06em;color:var(--ink);}
+.coop-quote .qb{margin-top:12px;font-family:var(--serif-en);font-style:italic;font-size:13px;letter-spacing:.2em;color:var(--gold-dim);}
+
+/* 站点页脚 */
+.site-footer{text-align:center;padding:30px 20px 36px;font-family:var(--serif-cn);font-size:11px;letter-spacing:.06em;color:var(--gold-dim);opacity:.72;}
+
+/* 通用图片查看器（detail-overlay）—— 展览/关于页共用，左右滑动切换 + 景深特效
+   小白讲解：作品详情和图片查看器都用 .detail-overlay 做遮罩，但一个要能滚动、
+     一个不能滚动。基础类只管背景和淡入淡出，overflow 用修饰类区分。 */
+.detail-overlay{
+  position:fixed;inset:0;z-index:200;
+  background:rgba(255,255,255,.96);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  opacity:0;pointer-events:none;transition:opacity .4s ease;
+}
+/* 修饰类：作品详情（可滚动） / 通用图片查看器（不可滚动，flex 居中） */
+.detail-overlay.work-detail{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.detail-overlay.gallery-view{
+  display:block;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;overflow-x:hidden;
+  background:var(--bg);
+}
+/* 小白讲解：图片灯箱用与整站一致的白色遮罩，照片直接浮在白底上（纯图，无框无投影）。
+   标题/副标题/圆点/关闭按钮沿用基础样式（深色墨字 + 青铜金点缀），在白底上天然可读，
+   因此这里无需额外覆盖颜色。 */
+/* 小白讲解：gallery-view 用 flex 布局居中 viewer，确保图片始终基于视口左右居中。
+   viewer 不再用绝对定位，避免 transform/absolute 在复杂嵌套中的偏移问题。 */
+.detail-overlay.gallery-view .viewer {
+  display:block;
+  width:100%;max-width:min(1100px,94vw);
+  margin:0 auto;padding:0 0 64px;
+}
+.detail-overlay.show{opacity:1;pointer-events:auto;}
+/* 查看器副标题（日期 · 标签 等） */
+.detail-sub{font-family:var(--serif-en);font-size:13px;letter-spacing:.18em;color:var(--gold-dim);text-align:center;}
+.detail-close{
+  position:fixed;top:16px;right:16px;z-index:210;
+  width:38px;height:38px;border-radius:50%;
+  border:1px solid var(--line);background:rgba(37,99,235,.18);
+  color:var(--gold);font-size:20px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .4s ease,background .3s,color .3s;
+}
+.detail-close.show{opacity:1;pointer-events:auto;}
+.detail-close:active{background:var(--ink);color:var(--paper);}
+/* 通用图片查看器：竖向整图堆叠，所有图片按序从上到下完整展示，可上下滚动 */
+.gallery-header{position:sticky;top:0;z-index:5;background:var(--bg);padding:18px 16px 12px;text-align:center;}
+.detail-overlay.gallery-view .detail-name{margin:0;font-size:26px;}
+.detail-overlay.gallery-view .detail-name.studio{font-size:20.8px;}
+.detail-overlay.gallery-view .detail-sub{margin-top:6px;}
+.viewer-track{display:block;}
+.viewer-slide{display:block;width:100%;margin:18px 0 0;opacity:1;transform:none;filter:none;}
+.viewer-slide .frame{padding:0;background:none;border:none;box-shadow:none;width:100%;max-width:100%;margin:0 auto;}
+.viewer-slide .frame img{display:block;width:100%;height:auto;max-height:none;object-fit:contain;pointer-events:none;-webkit-user-drag:none;}
+/* 画廊已改为竖向整图堆叠（移除左右滑动 / 底部圆点 / 滑动提示） */
+
+/* 加载/错误提示 */
+.loading-state,.error-state{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:var(--bg);}
+.loading-state .spinner{width:32px;height:32px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-state p,.error-state p{font-family:var(--serif-cn);font-size:13px;letter-spacing:.15em;color:var(--gold-dim);}
+.error-state p{color:#c66;}
+
+@media (min-width:441px){
+  .topbar,.menu-card,.lang-card,.works-page,.exh-page,.video-feed,.about-feed,.contact-page{border-left:1px solid rgba(9,9,11,.07);border-right:1px solid rgba(9,9,11,.07);}
+}
+
+/* ============================================================
+   磨砂毛玻璃设计系统（frosted glass）
+   小白讲解：全站统一用半透明 + 背景模糊的"玻璃"质感。
+     变量统一控制玻璃的颜色、边框、模糊强度，改主题只动这里。
+   ============================================================ */
+:root{
+  --glass-bg:rgba(255,255,255,.82);
+  --glass-bg-strong:rgba(255,255,255,.90);
+  --glass-brd:rgba(9,9,11,.10);
+  --glass-hi:rgba(255,255,255,.65);
+  --glass-blur:18px;
+  --nav-h:64px;
+}
+.glass{
+  background:var(--glass-bg);
+  backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  border:1px solid var(--line);
+  box-shadow:0 10px 34px rgba(9,9,11,.10), inset 0 1px 0 var(--glass-hi);
+}
+
+/* 顶栏 / 各页头统一玻璃化 */
+.topbar{
+  background:var(--glass-bg-strong);
+  backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  border-bottom:1px solid var(--paper);
+}
+.page-label{
+  font-family:var(--serif-cn);font-size:16px;font-weight:700;letter-spacing:.22em;
+  color:var(--ink);flex:1;text-align:left;padding-left:2px;
+}
+.top-tabs{flex:1;display:flex;align-items:center;gap:22px;padding-left:2px;}
+.top-tab{position:relative;border:none;background:transparent;cursor:pointer;padding:2px 0;
+  font-family:var(--serif-cn);font-size:16px;font-weight:700;letter-spacing:.18em;color:var(--muted);transition:color .3s;}
+.top-tab.active{color:var(--ink);}
+.top-tab.active::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:2px;background:var(--ink);}
+.top-tab:active{color:var(--ink);}
+.series-bar,.exh-bar,.video-bar,.about-bar,.contact-head{
+  background:var(--glass-bg-strong);
+  backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  border-bottom:1px solid var(--paper);
+}
+.lang-card{
+  background:var(--glass-bg-strong);
+  backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  border-bottom:1px solid var(--line-soft);
+}
+
+/* ============================================================
+   底部悬浮导航栏（4 个页面常驻）
+   小白讲解：悬浮在页面底部的圆角玻璃长条，4 个按钮（首页/作品/展览/关于），
+     每个视图都常驻显示；当前页对应的按钮高亮（金色）。点击切换到对应视图。
+   ============================================================ */
+.bottom-nav{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(14px + env(safe-area-inset-bottom));
+  width:calc(100% - 28px);max-width:412px;z-index:140;
+  height:var(--nav-h);
+  display:flex;align-items:center;justify-content:space-around;
+  border-radius:22px;
+  background:var(--glass-bg-strong);
+  backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  border:1px solid var(--line-soft);
+  box-shadow:0 12px 40px -18px rgba(9,9,11,.5), inset 0 1px 0 var(--glass-hi);
+  padding:0 8px;
+}
+.bottom-nav .nav-btn{
+  flex:1;height:48px;border:none;background:transparent;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  color:var(--muted);font-family:var(--serif-cn);font-size:11px;letter-spacing:.12em;
+  border-radius:14px;transition:color .3s,background .3s,transform .2s;position:relative;
+}
+.bottom-nav .nav-btn .ni{font-size:18px;line-height:1;transition:transform .3s;}
+.bottom-nav .nav-btn:active{transform:scale(.94);}
+.bottom-nav .nav-btn.active{color:var(--ink);background:transparent;}
+.bottom-nav .nav-btn.active .ni{transform:translateY(-1px);}
+.bottom-nav .nav-btn.active::after{content:"";position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--ink);}
+
+/* ============================================================
+   关于页右下角悬浮联系按钮
+   ============================================================ */
+.contact-fab{
+  position:fixed;right:18px;bottom:calc(var(--nav-h) + 26px + env(safe-area-inset-bottom));
+  z-index:135;width:52px;height:52px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--glass-bg-strong);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--line);color:var(--gold);
+  box-shadow:0 8px 26px rgba(9,9,11,.12);cursor:pointer;transition:transform .25s,background .3s,color .3s;
+}
+.contact-fab:active{transform:scale(.92);background:var(--ink);color:var(--paper);}
+.contact-fab svg{width:24px;height:24px;}
+
+/* ============================================================
+   作品页二级栏：作品 / 视频 切换 + 标签
+   小白讲解：作品页顶栏下方多一条玻璃栏，左边是「作品 / 视频」两个切换按钮，
+     右边是随当前切换而变化的标签行（作品=系列标签；视频=分类标签）。
+   ============================================================ */
+.works-subbar{
+  position:fixed;top:var(--topbar-h);left:50%;transform:translateX(-50%);
+  width:100%;max-width:440px;z-index:31;
+  padding:12px 18px 14px;
+  background:var(--glass-bg-strong);
+  backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  border-bottom:1px solid var(--paper);
+  opacity:0;transform:translateX(-50%) translateY(-10px);
+  transition:opacity .6s ease .25s,transform .6s ease .25s;
+  display:flex;flex-direction:column;gap:12px;
+}
+body.page-in .works-subbar{opacity:1;transform:translateX(-50%) translateY(0);}
+.works-tabs{display:flex;gap:8px;}
+.works-tab{
+  flex:0 0 auto;height:32px;padding:0 18px;border-radius:16px;
+  border:1px solid var(--line);background:rgba(9,9,11,.05);color:var(--ink);
+  font-family:var(--serif-cn);font-size:13px;letter-spacing:.08em;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:background .3s,color .3s,border-color .3s;
+}
+.works-tab.active{background:var(--ink);color:var(--paper);border-color:var(--line);}
+.works-tags{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;}
+.works-tags::-webkit-scrollbar{display:none;}
+.works-tags .series-tag,.works-tags .cat-tag{margin-right:8px;}
+
+.works-scroller{position:relative;z-index:2;width:100%;max-width:440px;margin:0 auto;height:100vh;
+  overflow-y:scroll;-webkit-overflow-scrolling:touch;
+  padding-top:calc(var(--topbar-h) + var(--bar-h) + var(--bar-gap));padding-bottom:calc(var(--nav-h) + 40px);}
+.works-scroller::-webkit-scrollbar{scrollbar-width:none;}
+.works-scroller{scrollbar-width:none;}
+.works-panel{display:none;}
+.works-panel.active{display:block;}
+
+/* 作品「小红书」式双列瀑布流：图片 + 名称 + 系列（CSS columns 自动错落） */
+.works-gallery{column-count:2;column-gap:10px;padding:0 12px;}
+.wg-card{
+  break-inside:avoid;margin:0 0 12px;display:block;
+  border-radius:16px;overflow:hidden;cursor:pointer;
+  background:var(--glass-bg);border:1px solid var(--line);
+  box-shadow:0 8px 24px rgba(9,9,11,.10);
+  opacity:0;transform:translateY(24px) scale(.98);
+  transition:opacity .6s ease,transform .6s cubic-bezier(.2,.8,.2,1),box-shadow .35s ease;
+  transition-delay:var(--d,0s);
+}
+.wg-card.in{opacity:1;transform:none;}
+.wg-card:active{box-shadow:0 12px 32px rgba(9,9,11,.12);}
+.wg-card .wg-img{position:relative;width:100%;background:var(--paper-3);display:block;}
+.wg-card .wg-img img{width:100%;height:auto;display:block;}
+.wg-card .wg-info{padding:9px 11px 11px;}
+.wg-card .wg-name{font-family:var(--serif-cn);font-size:13.5px;line-height:1.5;color:var(--ink);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.wg-card .wg-series{margin-top:5px;display:inline-block;font-size:10.5px;letter-spacing:.05em;
+  color:var(--gold);border:1px solid var(--line);border-radius:8px;padding:2px 8px;background:rgba(37,99,235,.08);}
+/* 视频卡片的播放角标（与作品卡同款排版，叠加播放标识） */
+.wg-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:42px;height:42px;border-radius:50%;
+  background:rgba(9,9,11,.45);display:flex;align-items:center;justify-content:center;transition:background .3s,transform .3s;}
+.wg-card:active .wg-play{background:rgba(9,9,11,.6);transform:translate(-50%,-50%) scale(1.08);}
+.wg-play::after{content:"";margin-left:3px;border-style:solid;border-width:8px 0 8px 13px;border-color:transparent transparent transparent #fff;}
+
+/* ============================================================
+   展览页「朋友圈」样式
+   ============================================================ */
+.exh-card.mom{background:transparent;border:none;box-shadow:none;max-width:100%;}
+.exh-mom-head{display:flex;align-items:center;gap:11px;}
+.exh-avatar{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);object-fit:cover;
+  background:var(--paper-3);flex:0 0 auto;box-shadow:0 2px 10px rgba(9,9,11,.10);}
+.exh-mom-meta{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.exh-mom-name{font-family:var(--serif-cn);font-size:15px;font-weight:700;letter-spacing:.08em;color:var(--gold);}
+.exh-mom-date{font-family:var(--serif-en);font-size:12px;letter-spacing:.12em;color:var(--gold-dim);}
+.exh-mom-title{margin-top:12px;font-family:var(--serif-cn);font-size:18px;font-weight:700;letter-spacing:.1em;color:var(--ink);text-shadow:none;}
+.exh-mom-desc{margin-top:7px;font-family:var(--serif-cn);font-size:13px;line-height:1.85;letter-spacing:.03em;color:var(--ink);opacity:.85;}
+.exh-mom-divider{height:1px;background:linear-gradient(90deg,transparent,var(--glass-brd),transparent);margin:16px 0 4px;}
+.exh-mom-more{margin-top:2px;font-family:var(--serif-cn);font-size:11px;letter-spacing:.06em;color:var(--gold-dim);}
+.exh-mom-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;}
+
+/* ============================================================
+   联系页：6 个联系方式按钮 + 展示卡
+   ============================================================ */
+.contact-methods{display:flex;flex-direction:row;flex-wrap:nowrap;gap:8px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;padding:10px 20px 4px;scrollbar-width:none;}
+.contact-methods::-webkit-scrollbar{display:none;}
+.cm-btn{
+  flex:0 0 auto;scroll-snap-align:start;white-space:nowrap;
+  height:36px;padding:0 15px;border-radius:18px;border:1px solid var(--line);
+  background:transparent;color:var(--muted);
+  font-family:var(--sans);font-size:13px;letter-spacing:.04em;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  transition:background .3s,color .3s,border-color .3s,transform .2s;
+}
+.cm-btn .ci{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;}
+.cm-btn .ci svg{width:18px;height:18px;}
+.cm-btn:active{transform:scale(.96);}
+.cm-btn.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.cm-display{margin:16px 20px 0;}
+/* 联系方式圆点指示器（替代原顶部 4 个按钮）：滑到哪张卡片，对应圆点变实心 */
+.cm-dots{display:flex;justify-content:center;align-items:center;gap:9px;margin-top:18px;}
+.cm-dots span{width:7px;height:7px;border-radius:50%;background:transparent;border:1px solid var(--line);
+  transition:background .3s,border-color .3s,transform .3s;cursor:pointer;}
+.cm-dots span.on{background:var(--ink);border-color:var(--ink);transform:scale(1.15);}
+/* 可左右滑动的卡片轮播（带淡入淡出） */
+.cm-viewport{overflow:hidden;touch-action:pan-y;margin-top:4px;}
+.cm-track{display:flex;will-change:transform;}
+.cm-slide{flex:0 0 100%;opacity:.25;transition:opacity .45s ease;padding:2px 0;}
+.cm-slide.active{opacity:1;}
+.cm-card{
+  background:var(--glass-bg);border:1px solid var(--line-soft);border-radius:18px;
+  padding:26px 22px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;
+  box-shadow:
+    0 1px 3px rgba(9,9,11,.05),
+    0 10px 28px -8px rgba(9,9,11,.12),
+    0 26px 56px -14px rgba(9,9,11,.09);
+  min-height:180px;justify-content:center;
+}
+.cm-card .cm-icon{width:58px;height:58px;border-radius:50%;border:1px solid var(--ink);
+  background:rgba(9,9,11,.05);display:flex;align-items:center;justify-content:center;color:var(--ink);}
+.cm-card .cm-icon svg{width:30px;height:30px;}
+.cm-card .cm-title{font-family:var(--serif-cn);font-size:19px;font-weight:700;letter-spacing:.16em;color:var(--ink);}
+.cm-card .cm-sub{font-family:var(--serif-cn);font-size:13px;font-weight:300;letter-spacing:.05em;color:var(--gold-dim);}
+.cm-card .cm-note{font-family:var(--serif-cn);font-size:11.5px;letter-spacing:.04em;color:var(--gold-dim);}
+.cm-empty{font-family:var(--serif-cn);font-size:13px;color:var(--gold-dim);letter-spacing:.06em;}
+
+/* ============================================================
+   拉灯开场动画（替换原开门动效）
+   小白讲解：黑屏中一盏吊灯，灯绳被"拉"一下 → 灯泡亮起（金光弥漫）→
+     整个黑幕向上滑走，首页从顶部下滑出现。
+   ============================================================ */
+.lamp-intro{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 50% 42%,#1a1712 0%,#070608 60%,#000 100%);pointer-events:none;overflow:hidden;}
+.lamp-intro.gone{display:none;}
+.intro-stage{display:flex;flex-direction:column;align-items:center;gap:24px;z-index:2;}
+.intro-name{font-family:var(--serif-cn);font-size:30px;font-weight:300;letter-spacing:.26em;color:#e9dcc0;text-indent:.26em;
+  opacity:0;transform:translateY(10px);transition:opacity .9s ease,transform .9s ease;}
+.lamp-intro.ready .intro-name{opacity:1;transform:none;}
+.intro-pct{font-family:var(--serif-en);font-size:60px;font-weight:300;letter-spacing:.02em;color:#f3e6c8;line-height:1;
+  font-variant-numeric:tabular-nums;min-width:2.4em;text-align:center;}
+.intro-pct .sign{font-size:24px;margin-left:3px;opacity:.62;}
+.intro-bar{width:180px;height:1.5px;background:rgba(233,220,192,.16);position:relative;overflow:hidden;border-radius:2px;}
+.intro-bar-fill{position:absolute;left:0;top:0;height:100%;width:0;
+  background:linear-gradient(90deg,#d8a64a,#f3e6c8);transition:width .18s ease;}
+.intro-tip{font-family:var(--serif-en);font-style:italic;font-size:11px;letter-spacing:.42em;
+  color:rgba(233,220,192,.5);text-transform:uppercase;}
+.lamp-intro.open{transform:translateY(-100%);transition:transform 1s cubic-bezier(.7,0,.2,1);}
+
+/* ============================================================
+   高端杂志风 · 排版细节
+   小白讲解：正文统一无衬线（Inter / Noto Sans SC），标题/刊名保留衬线，
+     形成"衬线大标题 + 无衬线正文"的编辑式对比；首字下沉与细发丝线增强纸刊质感。
+   ============================================================ */
+.bio p,.block p,.detail-desc,.exh-desc,.v-title,.info-card p,.award .at,
+.cm-sub,.cm-note,.coop-card .cd,.exh-mom-desc,.c-sub,.c-note,.detail-meta dd,
+.work-title .manifesto,.site-footer,.cm-empty,.contact-page p,.about-feed p{
+  font-family:var(--sans);
+}
+/* 注：已移除 .bio / .block 的首字下沉（drop-cap）。中文段落较短、
+   移动屏幕窄时，大字浮左会导致正文缩成窄列、模块间距视觉错乱。 */
+.bio p:first-of-type{font-weight:500;opacity:1;}
+.sec-head{font-family:var(--display);}
+.exh-mom-name{font-family:var(--display);}
+.contact-head .cn,.exh-title .cn,.video-title .cn,.about-title .cn,.work-name{
+  font-family:var(--display);
+}
+.artist-name{font-family:var(--display);}
+</style>
+</head>
+<body>
+<div class="stage">
+  <!-- 全局背景 -->
+  <div class="bg-layer"></div>
+
+  <!-- 进度加载开场动效（仅首次）：0% → 100% 后自动进入首页 -->
+  <div class="lamp-intro" id="lampIntro">
+    <div class="intro-stage">
+      <div class="intro-name">陈 河 田</div>
+      <div class="intro-pct" id="introPct">0<span class="sign">%</span></div>
+      <div class="intro-bar"><div class="intro-bar-fill" id="introBarFill"></div></div>
+      <div class="intro-tip">Entering</div>
+    </div>
+  </div>
+
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <div class="page-label" id="pageLabel">首页</div>
+    <div class="top-tabs" id="topTabs" style="display:none;">
+      <button class="top-tab active" data-tab="works" id="topTabWorks">作品</button>
+      <button class="top-tab" data-tab="videos" id="topTabVideos">视频</button>
+    </div>
+    <div class="top-right">
+      <div class="artist-name" id="artistName">陈河田</div>
+      <button class="lang-btn" id="langBtn" aria-label="切换语言">CH</button>
+    </div>
+  </header>
+
+  <!-- 语言卡片（中文 + 用户选择的外语，由 JS 动态渲染） -->
+  <nav class="lang-card" id="langCard">
+    <div class="lang-list" id="langList">
+      <div class="lang-item active" data-lang="zh"><span class="flag">🇨🇳</span><span class="name">中文</span><span class="tick">✓</span></div>
+      <!-- 其他语言由 renderLangList() 动态插入 -->
+    </div>
+    <div class="lang-hint">— Language —</div>
+  </nav>
+
+  <!-- ================= HOME 视图 ================= -->
+  <section class="view" id="view-home">
+    <div class="hero" id="home">
+      <div class="art-fallback"></div>
+      <!-- 背景图片/视频由 JS 动态插入 -->
+      <div class="hero-veil"></div>
+      <div class="work-title" id="workTitle">
+        <span class="cn">
+          <svg width="300" height="130" viewBox="0 0 300 130">
+            <text x="150" y="92" text-anchor="middle" font-size="62" id="titleText">陈河田</text>
+          </svg>
+        </span>
+        <p class="manifesto" id="heroSubtitle">色彩浓烈，构图饱满——以故事为画笔，以信仰为颜料，在现实与精神之间自由穿梭。</p>
+      </div>
+      <div class="hero-actions" id="heroActions">
+        <!-- 按钮由 JS 动态生成 -->
+      </div>
+      <div class="scroll-cue">Scroll</div>
+    </div>
+  </section>
+
+  <!-- ================= WORKS 视图（作品集 + 视频） ================= -->
+  <section class="view" id="view-works">
+    <!-- 二级栏：作品 / 视频 切换 + 标签行（横滑） -->
+    <div class="works-subbar" id="worksSubbar">
+      <div class="works-tags" id="worksTags">
+        <div class="series-track" id="seriesTrack"><!-- 作品系列标签由 JS 动态生成 --></div>
+        <div class="video-track" id="videoTrack" style="display:none;"><!-- 视频分类标签由 JS 动态生成 --></div>
+      </div>
+    </div>
+    <!-- 滚动容器：两个面板（作品 / 视频） -->
+    <main class="works-scroller" id="worksScroll">
+      <!-- 作品面板：小红书式双列瀑布流（图片 + 名称 + 系列） -->
+      <div class="works-panel active" id="panelWorks">
+        <div class="works-gallery" id="worksGallery"><!-- 小红书式双列卡片由 JS 动态生成 --></div>
+        <div class="empty-state" id="emptyState" data-i18n="empty.works" style="display:none;">该系列暂无作品</div>
+      </div>
+      <!-- 视频面板：与「作品」页同款小红书式双列卡片（图 + 名称 + 分类） -->
+      <div class="works-panel" id="panelVideos">
+        <div class="works-gallery" id="videoGallery"><!-- 小红书式双列卡片由 JS 动态生成 --></div>
+        <div class="empty-state" id="videoEmpty" data-i18n="empty.videos" style="display:none;">该分类暂无视频</div>
+      </div>
+      <footer class="site-footer" id="worksFooter">© 2026 陈河田. All rights reserved.</footer>
+    </main>
+  </section>
+
+  <!-- ================= EXHIBITIONS 视图（展览） ================= -->
+  <section class="view" id="view-exhibitions">
+    <main class="exh-page" id="exhScroll">
+      <!-- 年份筛选栏：固定页头（标题 + 单行横滑年份标签） -->
+      <div class="exh-bar" id="exhBar">
+        <div class="exh-track" id="exhTrack"><!-- 年份标签由 JS 动态生成 --></div>
+      </div>
+      <!-- 展览卡片列表（每张占满一屏，scroll-snap 整幅切换） -->
+      <div id="exhList"></div>
+      <div class="empty-state" id="exhEmpty" data-i18n="empty.exhibitions" style="display:none;">该年份暂无展览</div>
+      <footer class="site-footer">© 2026 陈河田. All rights reserved.</footer>
+    </main>
+  </section>
+
+  <!-- ================= VIDEOS 视图（视频已并入「作品」页的标签） ================= -->
+  <section class="view" id="view-videos"></section>
+
+  <!-- ================= ABOUT 视图（关于）—— 照抄 about.html ================= -->
+  <section class="view" id="view-about">
+    <!-- 右下角悬浮联系按钮 -->
+    <button class="contact-fab" id="contactFab" aria-label="联系">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v11H8l-4 4V5z" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke-linecap="round"/></svg>
+    </button>
+    <main class="about-feed" id="aboutFeed">
+      <!-- 页头：6 个标签（固定吸顶，3×2） -->
+      <div class="about-bar" id="aboutBar">
+        <div class="about-tags" id="aboutTags">
+          <!-- 6 个标签由 JS 生成 -->
+        </div>
+      </div>
+      <!-- 6 个 section 由 JS 生成 -->
+      <div id="aboutContent"></div>
+      <footer class="site-footer">© 2026 陈河田. All rights reserved.</footer>
+    </main>
+  </section>
+
+  <!-- ================= CONTACT 视图（联系）—— 照抄 contact.html ================= -->
+  <section class="view" id="view-contact">
+    <main class="contact-page" id="contactPage">
+      <!-- 6 个联系方式按钮（微信/公众号/小红书/B站/邮箱/脸书） -->
+      <div class="contact-methods" id="contactMethods"><!-- 按钮由 JS 生成 --></div>
+      <!-- 点击按钮后展示对应联系方式 -->
+      <div class="cm-display" id="cmDisplay"><!-- 展示卡由 JS 生成 --></div>
+      <!-- 商业合作区（文案/卡片/引言不变） -->
+      <div class="coop" id="coopBox"><!-- 商业合作 JS 生成 --></div>
+      <footer class="site-footer">© 2026 陈河田. All rights reserved.</footer>
+    </main>
+    <!-- toast 提示（邮箱复制成功） -->
+    <div class="toast" id="contactToast" data-i18n="toast.email_copied">邮箱已复制</div>
+  </section>
+
+  <!-- 作品详情 overlay（可滚动：展示画作元信息+描述，不再展示图片） -->
+  <button class="detail-close" id="detailClose">×</button>
+  <div class="detail-overlay work-detail" id="detailOverlay">
+    <div class="detail-head">
+      <!-- 小白讲解：去掉了 .detail-art 图片展示区，因为列表卡片已经能看到作品图，
+           弹窗里再放一次大图意义不大，反而拖慢加载（点一下要下载 1MB 大图）。
+           现在弹窗只展示「名称 + 状态 + 元信息 + 描述」，更轻、更快。 -->
+      <h2 class="detail-name" id="detailName"></h2>
+      <div class="detail-status" id="detailStatus"></div>
+      <div class="detail-divider"></div>
+    </div>
+    <div class="detail-body">
+      <dl class="detail-meta">
+        <div><dt data-i18n="detail.price">价格 Price</dt><dd id="detailPrice"></dd></div>
+        <div><dt data-i18n="detail.series">系列 Series</dt><dd id="detailSeries"></dd></div>
+        <div><dt data-i18n="detail.material">材料 Material</dt><dd id="detailMaterial"></dd></div>
+        <div><dt data-i18n="detail.size">尺寸 Size</dt><dd id="detailSize"></dd></div>
+        <div><dt data-i18n="detail.year">年份 Year</dt><dd id="detailYear"></dd></div>
+      </dl>
+      <p class="detail-desc" id="detailDesc"></p>
+      <!-- 高清大图：点进弹窗后由 JS 赋 src 才加载，比列表缩略图清晰，方便看细节 -->
+      <div class="detail-fullimg img-wrap" id="detailFullWrap" style="display:none;">
+        <img class="img-fade" id="detailFullImg" alt="" decoding="async">
+      </div>
+    </div>
+  </div>
+
+  <!-- 视频播放 overlay（B站内嵌播放器） -->
+  <button class="detail-close" id="playClose">×</button>
+  <div class="play-overlay" id="playOverlay">
+    <div class="play-box">
+      <div class="play-video" id="playVideoBox"></div>
+      <h2 class="play-title" id="playTitle"></h2>
+      <div class="play-row"><span class="play-chip" id="playChip"></span></div>
+    </div>
+  </div>
+
+  <!-- 通用图片查看器 overlay（展览现场图 / 关于工作室照片共用，竖向整图堆叠滚动） -->
+  <button class="detail-close" id="galleryClose">×</button>
+  <div class="detail-overlay gallery-view" id="galleryOverlay">
+    <div class="viewer">
+      <div class="gallery-header">
+        <h2 class="detail-name" id="galleryName"></h2>
+        <div class="detail-sub" id="gallerySub"></div>
+      </div>
+      <div class="viewer-track" id="galleryTrack"></div>
+    </div>
+  </div>
+
+  <!-- toast 提示（复制邮箱 / CV 上线提示） -->
+  <div class="toast" id="toast">邮箱已复制</div>
+
+  <!-- 底部悬浮导航栏（首页 / 作品 / 展览 / 关于，常驻 4 页） -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="nav-btn active" data-route="home">
+      <span class="ni">⌂</span><span>首页</span>
+    </button>
+    <button class="nav-btn" data-route="works">
+      <span class="ni">◈</span><span>作品</span>
+    </button>
+    <button class="nav-btn" data-route="exhibitions">
+      <span class="ni">❖</span><span>展览</span>
+    </button>
+    <button class="nav-btn" data-route="about">
+      <span class="ni">✿</span><span>关于</span>
+    </button>
+  </nav>
+
+  <!-- 加载状态 -->
+  <div class="loading-state" id="loadingState">
+    <div class="spinner"></div>
+    <p>正在加载...</p>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   全局状态 STATE：存放从 data/*.json 加载的所有数据
+   小白讲解：把网站所有数据都存在这个对象里，各个视图渲染时从这读取。
+   ============================================================ */
+var STATE = {
+  site: null,       // data/site.json 的内容（已去掉翻译数据，只有基础配置，约 13KB）
+  works: [],        // data/works.json 的作品数组
+  videos: [],      // data/videos.json 的视频数组
+  timeline: [],    // data/timeline.json 的时间线数组
+  lang: 'zh',      // 当前语言（默认中文）
+  i18n: {},        // 当前语言的翻译（从 data/i18n/{lang}.json 加载，约 23KB；zh 时为空对象）
+  rendered: {}      // 记录哪些视图已经渲染过，避免重复渲染
+};
+
+/* 当前语言简称（显示在语言按钮上） */
+var LANG_ABBR = {zh:'CH', en:'EN', fr:'FR', de:'DE', es:'ES', ru:'RU', ar:'AR', tw:'TW', ja:'JA', ko:'KO', pt:'PT', it:'IT'};
+
+/* 所有语言的元数据（旗帜 + 自我称呼名称）
+   小白讲解：主网站的语言列表是动态渲染的，用户在管理后台选了哪些语言，
+     这里就根据 selectedLangs 渲染对应的旗帜和名称。 */
+var LANG_META = {
+  zh: {flag:'🇨🇳', name:'中文'},
+  en: {flag:'🇺🇸', name:'English'},
+  fr: {flag:'🇫🇷', name:'Français'},
+  de: {flag:'🇩🇪', name:'Deutsch'},
+  es: {flag:'🇪🇸', name:'Español'},
+  ru: {flag:'🇷🇺', name:'Русский'},
+  ar: {flag:'🇸🇦', name:'العربية'},
+  tw: {flag:'🇹🇼', name:'繁體中文'},
+  ja: {flag:'🇯🇵', name:'日本語'},
+  ko: {flag:'🇰🇷', name:'한국어'},
+  pt: {flag:'🇵🇹', name:'Português'},
+  it: {flag:'🇮🇹', name:'Italiano'},
+};
+
+/* ============================================================
+   UI_TRANSLATIONS：前端内置的静态 UI 文字翻译表（7 种语言）
+   小白讲解：这里存放的是"写死在 HTML 里的界面文字"（菜单项、页面标题、
+     弹窗标签、状态文字等）。这些文字不依赖后端翻译，切换语言时即时生效。
+     动态内容（作品名、视频标题等）用 t() 函数从 site.json 查询。
+   设计要点：根据用户需求"中文保留+英文切换"——
+     .cn 元素永远显示中文（不查这里），.en/.sub 元素查这里。
+     zh 和 en 模式下副标题都显示英文，其他语言显示对应外语。
+   ============================================================ */
+var UI_TRANSLATIONS = {
+  zh: {
+    /* 汉堡菜单副标题（中文模式下也显示英文，符合原设计） */
+    'menu.home': 'Home', 'menu.works': 'Works', 'menu.exhibitions': 'Exhibitions',
+    'menu.videos': 'Video', 'menu.about': 'About', 'menu.contact': 'Contact',
+    /* 各页面页头副标题 */
+    'page.exhibitions': 'Exhibitions', 'page.videos': 'Video Hall',
+    'page.about': 'About', 'page.contact': 'Contact',
+    'page.videos.sub': '影像里的创作、展览与对话 · 轻触任意视频即可播放',
+    /* 作品详情弹窗标签 */
+    'detail.price': '价格 Price', 'detail.series': '系列 Series',
+    'detail.material': '材料 Material', 'detail.size': '尺寸 Size', 'detail.year': '年份 Year',
+    /* 作品状态文字 */
+    'status.on_sale': '可收藏', 'status.exhibition': '展览中',
+    'status.sold': '已售出', 'status.not_for_sale': '',
+    /* 筛选/空状态/提示 */
+    'filter.all': '全部', 'empty.works': '该系列暂无作品',
+    'empty.exhibitions': '该年份暂无展览', 'empty.videos': '该分类暂无视频',
+    'hint.swipe': '← 左右滑动切换 →', 'hint.gallery': '左右滑动查看其他图片',
+    'hint.studio': '点击任意照片查看大图',
+    /* 关于页标签和 section 标题 */
+    'about.tag.basic': '基本信息', 'about.tag.philosophy': '艺术理念',
+    'about.tag.experience': '学历与经历', 'about.tag.media': '媒体与评价',
+    'about.tag.awards': '获奖记录', 'about.tag.studio': 'CV与工作室',
+    'about.section.basic': '基本信息', 'about.section.philosophy': '艺术理念',
+    'about.section.experience': '学历与经历', 'about.section.media': '媒体与评价',
+    'about.section.awards': '获奖记录', 'about.section.studio': 'CV与工作室',
+    'about.field.name': 'Name', 'about.field.title': 'Title',
+    'about.studio.desc': '创作描述', 'about.studio.photos': '工作室照片',
+    /* 其他 */
+    'coop.title': '商业合作', 'button.copy_email': '复制邮箱',
+    'button.cv_download': '点击下载完整 CV ↓',
+    'toast.cv': '完整 CV 即将上线，敬请期待', 'toast.email_copied': '邮箱已复制'
+  },
+  en: {
+    'menu.home': 'Home', 'menu.works': 'Works', 'menu.exhibitions': 'Exhibitions',
+    'menu.videos': 'Video', 'menu.about': 'About', 'menu.contact': 'Contact',
+    'page.exhibitions': 'Exhibitions', 'page.videos': 'Video Hall',
+    'page.about': 'About', 'page.contact': 'Contact',
+    'page.videos.sub': 'Creation, exhibitions and dialogues in video · Tap any video to play',
+    'detail.price': 'Price', 'detail.series': 'Series',
+    'detail.material': 'Material', 'detail.size': 'Size', 'detail.year': 'Year',
+    'status.on_sale': 'Available', 'status.exhibition': 'On Exhibition',
+    'status.sold': 'Sold', 'status.not_for_sale': '',
+    'filter.all': 'All', 'empty.works': 'No works in this series',
+    'empty.exhibitions': 'No exhibitions this year', 'empty.videos': 'No videos in this category',
+    'hint.swipe': '← Swipe to switch →', 'hint.gallery': 'Swipe to view other images',
+    'hint.studio': 'Tap any photo to view large',
+    'about.tag.basic': 'Basic Info', 'about.tag.philosophy': 'Philosophy',
+    'about.tag.experience': 'Background', 'about.tag.media': 'Media',
+    'about.tag.awards': 'Awards', 'about.tag.studio': 'CV & Studio',
+    'about.section.basic': 'Basic Information', 'about.section.philosophy': 'Artistic Philosophy',
+    'about.section.experience': 'Education & Experience', 'about.section.media': 'Media & Recognition',
+    'about.section.awards': 'Awards', 'about.section.studio': 'CV & Studio',
+    'about.field.name': 'Name', 'about.field.title': 'Title',
+    'about.studio.desc': 'Creative Description', 'about.studio.photos': 'Studio Photos',
+    'coop.title': 'Business Cooperation', 'button.copy_email': 'Copy Email',
+    'button.cv_download': 'Download Full CV ↓',
+    'toast.cv': 'Full CV coming soon', 'toast.email_copied': 'Email copied'
+  },
+  fr: {
+    'menu.home': 'Accueil', 'menu.works': 'Œuvres', 'menu.exhibitions': 'Expositions',
+    'menu.videos': 'Vidéo', 'menu.about': 'À propos', 'menu.contact': 'Contact',
+    'page.exhibitions': 'Expositions', 'page.videos': 'Salle Vidéo',
+    'page.about': 'À propos', 'page.contact': 'Contact',
+    'page.videos.sub': 'Création, expositions et dialogues en vidéo · Touchez une vidéo pour la lire',
+    'detail.price': 'Prix', 'detail.series': 'Série',
+    'detail.material': 'Matériau', 'detail.size': 'Format', 'detail.year': 'Année',
+    'status.on_sale': 'Disponible', 'status.exhibition': 'En exposition',
+    'status.sold': 'Vendu', 'status.not_for_sale': '',
+    'filter.all': 'Tout', 'empty.works': 'Aucune œuvre dans cette série',
+    'empty.exhibitions': 'Aucune exposition cette année', 'empty.videos': 'Aucune vidéo dans cette catégorie',
+    'hint.swipe': '← Glissez pour changer →', 'hint.gallery': 'Glissez pour voir d\'autres images',
+    'hint.studio': 'Touchez une photo pour l\'agrandir',
+    'about.tag.basic': 'Infos', 'about.tag.philosophy': 'Philosophie',
+    'about.tag.experience': 'Parcours', 'about.tag.media': 'Médias',
+    'about.tag.awards': 'Prix', 'about.tag.studio': 'CV & Atelier',
+    'about.section.basic': 'Informations de base', 'about.section.philosophy': 'Philosophie artistique',
+    'about.section.experience': 'Formation et expérience', 'about.section.media': 'Médias et reconnaissance',
+    'about.section.awards': 'Prix', 'about.section.studio': 'CV et Atelier',
+    'about.field.name': 'Nom', 'about.field.title': 'Titre',
+    'about.studio.desc': 'Description créative', 'about.studio.photos': 'Photos de l\'atelier',
+    'coop.title': 'Coopération commerciale', 'button.copy_email': 'Copier l\'email',
+    'button.cv_download': 'Télécharger le CV complet ↓',
+    'toast.cv': 'CV complet à venir', 'toast.email_copied': 'Email copié'
+  },
+  de: {
+    'menu.home': 'Startseite', 'menu.works': 'Werke', 'menu.exhibitions': 'Ausstellungen',
+    'menu.videos': 'Video', 'menu.about': 'Über', 'menu.contact': 'Kontakt',
+    'page.exhibitions': 'Ausstellungen', 'page.videos': 'Video-Halle',
+    'page.about': 'Über', 'page.contact': 'Kontakt',
+    'page.videos.sub': 'Kreation, Ausstellungen und Dialoge im Video · Tippen Sie auf ein Video zum Abspielen',
+    'detail.price': 'Preis', 'detail.series': 'Serie',
+    'detail.material': 'Material', 'detail.size': 'Größe', 'detail.year': 'Jahr',
+    'status.on_sale': 'Verfügbar', 'status.exhibition': 'In Ausstellung',
+    'status.sold': 'Verkauft', 'status.not_for_sale': '',
+    'filter.all': 'Alle', 'empty.works': 'Keine Werke in dieser Serie',
+    'empty.exhibitions': 'Keine Ausstellungen in diesem Jahr', 'empty.videos': 'Keine Videos in dieser Kategorie',
+    'hint.swipe': '← Wischen zum Wechseln →', 'hint.gallery': 'Wischen, um andere Bilder zu sehen',
+    'hint.studio': 'Tippen Sie auf ein Foto, um es zu vergrößern',
+    'about.tag.basic': 'Info', 'about.tag.philosophy': 'Philosophie',
+    'about.tag.experience': 'Werdegang', 'about.tag.media': 'Medien',
+    'about.tag.awards': 'Preise', 'about.tag.studio': 'CV & Atelier',
+    'about.section.basic': 'Grundinformationen', 'about.section.philosophy': 'Künstlerische Philosophie',
+    'about.section.experience': 'Ausbildung und Erfahrung', 'about.section.media': 'Medien und Anerkennung',
+    'about.section.awards': 'Auszeichnungen', 'about.section.studio': 'CV und Atelier',
+    'about.field.name': 'Name', 'about.field.title': 'Titel',
+    'about.studio.desc': 'Kreative Beschreibung', 'about.studio.photos': 'Atelierfotos',
+    'coop.title': 'Geschäftliche Zusammenarbeit', 'button.copy_email': 'E-Mail kopieren',
+    'button.cv_download': 'Vollständigen CV herunterladen ↓',
+    'toast.cv': 'Vollständiger CV folgt in Kürze', 'toast.email_copied': 'E-Mail kopiert'
+  },
+  es: {
+    'menu.home': 'Inicio', 'menu.works': 'Obras', 'menu.exhibitions': 'Exposiciones',
+    'menu.videos': 'Video', 'menu.about': 'Acerca', 'menu.contact': 'Contacto',
+    'page.exhibitions': 'Exposiciones', 'page.videos': 'Sala de Video',
+    'page.about': 'Acerca', 'page.contact': 'Contacto',
+    'page.videos.sub': 'Creación, exposiciones y diálogos en video · Toca cualquier video para reproducir',
+    'detail.price': 'Precio', 'detail.series': 'Serie',
+    'detail.material': 'Material', 'detail.size': 'Tamaño', 'detail.year': 'Año',
+    'status.on_sale': 'Disponible', 'status.exhibition': 'En exposición',
+    'status.sold': 'Vendido', 'status.not_for_sale': '',
+    'filter.all': 'Todo', 'empty.works': 'No hay obras en esta serie',
+    'empty.exhibitions': 'No hay exposiciones este año', 'empty.videos': 'No hay videos en esta categoría',
+    'hint.swipe': '← Desliza para cambiar →', 'hint.gallery': 'Desliza para ver otras imágenes',
+    'hint.studio': 'Toca cualquier foto para verla en grande',
+    'about.tag.basic': 'Info', 'about.tag.philosophy': 'Filosofía',
+    'about.tag.experience': 'Trayectoria', 'about.tag.media': 'Medios',
+    'about.tag.awards': 'Premios', 'about.tag.studio': 'CV y Estudio',
+    'about.section.basic': 'Información básica', 'about.section.philosophy': 'Filosofía artística',
+    'about.section.experience': 'Educación y experiencia', 'about.section.media': 'Medios y reconocimiento',
+    'about.section.awards': 'Premios', 'about.section.studio': 'CV y Estudio',
+    'about.field.name': 'Nombre', 'about.field.title': 'Título',
+    'about.studio.desc': 'Descripción creativa', 'about.studio.photos': 'Fotos del estudio',
+    'coop.title': 'Cooperación comercial', 'button.copy_email': 'Copiar email',
+    'button.cv_download': 'Descargar CV completo ↓',
+    'toast.cv': 'CV completo próximamente', 'toast.email_copied': 'Email copiado'
+  },
+  ru: {
+    'menu.home': 'Главная', 'menu.works': 'Работы', 'menu.exhibitions': 'Выставки',
+    'menu.videos': 'Видео', 'menu.about': 'О себе', 'menu.contact': 'Контакты',
+    'page.exhibitions': 'Выставки', 'page.videos': 'Видеозал',
+    'page.about': 'О себе', 'page.contact': 'Контакты',
+    'page.videos.sub': 'Создание, выставки и диалоги в видео · Нажмите на видео для воспроизведения',
+    'detail.price': 'Цена', 'detail.series': 'Серия',
+    'detail.material': 'Материал', 'detail.size': 'Размер', 'detail.year': 'Год',
+    'status.on_sale': 'Доступно', 'status.exhibition': 'На выставке',
+    'status.sold': 'Продано', 'status.not_for_sale': '',
+    'filter.all': 'Все', 'empty.works': 'В этой серии нет работ',
+    'empty.exhibitions': 'В этом году нет выставок', 'empty.videos': 'В этой категории нет видео',
+    'hint.swipe': '← Листайте для переключения →', 'hint.gallery': 'Листайте для просмотра других изображений',
+    'hint.studio': 'Нажмите на фото, чтобы увеличить',
+    'about.tag.basic': 'Инфо', 'about.tag.philosophy': 'Философия',
+    'about.tag.experience': 'Опыт', 'about.tag.media': 'Медиа',
+    'about.tag.awards': 'Награды', 'about.tag.studio': 'CV и Студия',
+    'about.section.basic': 'Основная информация', 'about.section.philosophy': 'Художественная философия',
+    'about.section.experience': 'Образование и опыт', 'about.section.media': 'Медиа и признание',
+    'about.section.awards': 'Награды', 'about.section.studio': 'CV и Студия',
+    'about.field.name': 'Имя', 'about.field.title': 'Звание',
+    'about.studio.desc': 'Творческое описание', 'about.studio.photos': 'Фото студии',
+    'coop.title': 'Деловое сотрудничество', 'button.copy_email': 'Копировать email',
+    'button.cv_download': 'Скачать полное CV ↓',
+    'toast.cv': 'Полное CV скоро появится', 'toast.email_copied': 'Email скопирован'
+  },
+  ar: {
+    'menu.home': 'الرئيسية', 'menu.works': 'الأعمال', 'menu.exhibitions': 'المعارض',
+    'menu.videos': 'فيديو', 'menu.about': 'حول', 'menu.contact': 'اتصال',
+    'page.exhibitions': 'المعارض', 'page.videos': 'قاعة الفيديو',
+    'page.about': 'حول', 'page.contact': 'اتصال',
+    'page.videos.sub': 'الإبداع والمعارض والحوار في الفيديو · المس أي فيديو للتشغيل',
+    'detail.price': 'السعر', 'detail.series': 'السلسلة',
+    'detail.material': 'المادة', 'detail.size': 'الحجم', 'detail.year': 'السنة',
+    'status.on_sale': 'متاح', 'status.exhibition': 'في المعرض',
+    'status.sold': 'بيع', 'status.not_for_sale': '',
+    'filter.all': 'الكل', 'empty.works': 'لا توجد أعمال في هذه السلسلة',
+    'empty.exhibitions': 'لا توجد معارض هذا العام', 'empty.videos': 'لا توجد فيديوهات في هذه الفئة',
+    'hint.swipe': '← اسحب للتبديل →', 'hint.gallery': 'اسحب لعرض صور أخرى',
+    'hint.studio': 'المس أي صورة لعرضها بحجم كبير',
+    'about.tag.basic': 'معلومات', 'about.tag.philosophy': 'فلسفة',
+    'about.tag.experience': 'مسار', 'about.tag.media': 'إعلام',
+    'about.tag.awards': 'جوائز', 'about.tag.studio': 'السيرة والاستوديو',
+    'about.section.basic': 'المعلومات الأساسية', 'about.section.philosophy': 'الفلسفة الفنية',
+    'about.section.experience': 'التعليم والخبرة', 'about.section.media': 'الإعلام والتقدير',
+    'about.section.awards': 'الجوائز', 'about.section.studio': 'السيرة والاستوديو',
+    'about.field.name': 'الاسم', 'about.field.title': 'العنوان',
+    'about.studio.desc': 'وصف إبداعي', 'about.studio.photos': 'صور الاستوديو',
+    'coop.title': 'تعاون تجاري', 'button.copy_email': 'نسخ البريد',
+    'button.cv_download': 'تحميل السيرة الكاملة ↓',
+    'toast.cv': 'السيرة الكاملة قريباً', 'toast.email_copied': 'تم نسخ البريد'
+  },
+  /* 繁體中文 */
+  tw: {
+    'menu.home': '首頁', 'menu.works': '作品', 'menu.exhibitions': '展覽',
+    'menu.videos': '影片', 'menu.about': '關於', 'menu.contact': '聯絡',
+    'page.exhibitions': '展覽', 'page.videos': '影片廳',
+    'page.about': '關於', 'page.contact': '聯絡',
+    'page.videos.sub': '影像裡的創作、展覽與對話 · 輕觸任意影片即可播放',
+    'detail.price': '價格', 'detail.series': '系列',
+    'detail.material': '材料', 'detail.size': '尺寸', 'detail.year': '年份',
+    'status.on_sale': '可收藏', 'status.exhibition': '展覽中',
+    'status.sold': '已售出', 'status.not_for_sale': '',
+    'filter.all': '全部', 'empty.works': '該系列暫無作品',
+    'empty.exhibitions': '該年份暫無展覽', 'empty.videos': '該分類暫無影片',
+    'hint.swipe': '← 左右滑動切換 →', 'hint.gallery': '左右滑動查看其他圖片',
+    'hint.studio': '點擊任意照片查看大圖',
+    'about.tag.basic': '基本資訊', 'about.tag.philosophy': '藝術理念',
+    'about.tag.experience': '學歷與經歷', 'about.tag.media': '媒體與評價',
+    'about.tag.awards': '獲獎記錄', 'about.tag.studio': 'CV與工作室',
+    'about.section.basic': '基本資訊', 'about.section.philosophy': '藝術理念',
+    'about.section.experience': '學歷與經歷', 'about.section.media': '媒體與評價',
+    'about.section.awards': '獲獎記錄', 'about.section.studio': 'CV與工作室',
+    'about.field.name': '姓名', 'about.field.title': '頭銜',
+    'about.studio.desc': '創作描述', 'about.studio.photos': '工作室照片',
+    'coop.title': '商業合作', 'button.copy_email': '複製郵箱',
+    'button.cv_download': '點擊下載完整 CV ↓',
+    'toast.cv': '完整 CV 即將上線，敬請期待', 'toast.email_copied': '郵箱已複製'
+  },
+  /* 日本語 */
+  ja: {
+    'menu.home': 'ホーム', 'menu.works': '作品', 'menu.exhibitions': '展覧会',
+    'menu.videos': '動画', 'menu.about': 'について', 'menu.contact': '連絡',
+    'page.exhibitions': '展覧会', 'page.videos': 'ビデオホール',
+    'page.about': 'について', 'page.contact': '連絡',
+    'page.videos.sub': '動画で見る創作、展覧会と対話 · 任意の動画をタップして再生',
+    'detail.price': '価格', 'detail.series': 'シリーズ',
+    'detail.material': '素材', 'detail.size': 'サイズ', 'detail.year': '年',
+    'status.on_sale': '購入可能', 'status.exhibition': '展示中',
+    'status.sold': '売約済み', 'status.not_for_sale': '',
+    'filter.all': 'すべて', 'empty.works': 'このシリーズに作品はありません',
+    'empty.exhibitions': 'この年の展覧会はありません', 'empty.videos': 'このカテゴリーに動画はありません',
+    'hint.swipe': '← 左右にスワイプして切替 →', 'hint.gallery': 'スワイプして他の画像を見る',
+    'hint.studio': '写真をタップして拡大表示',
+    'about.tag.basic': '基本情報', 'about.tag.philosophy': '芸術理念',
+    'about.tag.experience': '学歴と経歴', 'about.tag.media': 'メディア',
+    'about.tag.awards': '受賞歴', 'about.tag.studio': 'CVとスタジオ',
+    'about.section.basic': '基本情報', 'about.section.philosophy': '芸術理念',
+    'about.section.experience': '学歴と経歴', 'about.section.media': 'メディアと評価',
+    'about.section.awards': '受賞歴', 'about.section.studio': 'CVとスタジオ',
+    'about.field.name': '氏名', 'about.field.title': '肩書',
+    'about.studio.desc': '創作について', 'about.studio.photos': 'スタジオ写真',
+    'coop.title': 'ビジネス協力', 'button.copy_email': 'メールをコピー',
+    'button.cv_download': '完全なCVをダウンロード ↓',
+    'toast.cv': '完全なCVは近日公開', 'toast.email_copied': 'メールをコピーしました'
+  },
+  /* 한국어 */
+  ko: {
+    'menu.home': '홈', 'menu.works': '작품', 'menu.exhibitions': '전시',
+    'menu.videos': '비디오', 'menu.about': '소개', 'menu.contact': '연락',
+    'page.exhibitions': '전시', 'page.videos': '비디오 홀',
+    'page.about': '소개', 'page.contact': '연락',
+    'page.videos.sub': '비디오로 보는 창작, 전시와 대화 · 재생하려면 비디오를 탭하세요',
+    'detail.price': '가격', 'detail.series': '시리즈',
+    'detail.material': '재료', 'detail.size': '크기', 'detail.year': '연도',
+    'status.on_sale': '구매 가능', 'status.exhibition': '전시 중',
+    'status.sold': '판매 완료', 'status.not_for_sale': '',
+    'filter.all': '전체', 'empty.works': '이 시리즈에 작품이 없습니다',
+    'empty.exhibitions': '올해 전시가 없습니다', 'empty.videos': '이 카테고리에 비디오가 없습니다',
+    'hint.swipe': '← 좌우로 스와이프하여 전환 →', 'hint.gallery': '스와이프하여 다른 이미지 보기',
+    'hint.studio': '사진을 탭하여 크게 보기',
+    'about.tag.basic': '기본 정보', 'about.tag.philosophy': '예술 철학',
+    'about.tag.experience': '학력 및 경력', 'about.tag.media': '미디어',
+    'about.tag.awards': '수상', 'about.tag.studio': 'CV 및 스튜디오',
+    'about.section.basic': '기본 정보', 'about.section.philosophy': '예술 철학',
+    'about.section.experience': '학력 및 경력', 'about.section.media': '미디어 및 평가',
+    'about.section.awards': '수상', 'about.section.studio': 'CV 및 스튜디오',
+    'about.field.name': '이름', 'about.field.title': '직함',
+    'about.studio.desc': '창작 설명', 'about.studio.photos': '스튜디오 사진',
+    'coop.title': '비즈니스 협력', 'button.copy_email': '이메일 복사',
+    'button.cv_download': '전체 CV 다운로드 ↓',
+    'toast.cv': '전체 CV가 곧 출시됩니다', 'toast.email_copied': '이메일이 복사되었습니다'
+  },
+  /* Português */
+  pt: {
+    'menu.home': 'Início', 'menu.works': 'Obras', 'menu.exhibitions': 'Exposições',
+    'menu.videos': 'Vídeo', 'menu.about': 'Sobre', 'menu.contact': 'Contato',
+    'page.exhibitions': 'Exposições', 'page.videos': 'Sala de Vídeo',
+    'page.about': 'Sobre', 'page.contact': 'Contato',
+    'page.videos.sub': 'Criação, exposições e diálogos em vídeo · Toque em qualquer vídeo para reproduzir',
+    'detail.price': 'Preço', 'detail.series': 'Série',
+    'detail.material': 'Material', 'detail.size': 'Tamanho', 'detail.year': 'Ano',
+    'status.on_sale': 'Disponível', 'status.exhibition': 'Em exposição',
+    'status.sold': 'Vendido', 'status.not_for_sale': '',
+    'filter.all': 'Tudo', 'empty.works': 'Sem obras nesta série',
+    'empty.exhibitions': 'Sem exposições este ano', 'empty.videos': 'Sem vídeos nesta categoria',
+    'hint.swipe': '← Deslize para alternar →', 'hint.gallery': 'Deslize para ver outras imagens',
+    'hint.studio': 'Toque em qualquer foto para ampliar',
+    'about.tag.basic': 'Info', 'about.tag.philosophy': 'Filosofia',
+    'about.tag.experience': 'Trajetória', 'about.tag.media': 'Mídia',
+    'about.tag.awards': 'Prêmios', 'about.tag.studio': 'CV e Estúdio',
+    'about.section.basic': 'Informações básicas', 'about.section.philosophy': 'Filosofia artística',
+    'about.section.experience': 'Educação e experiência', 'about.section.media': 'Mídia e reconhecimento',
+    'about.section.awards': 'Prêmios', 'about.section.studio': 'CV e Estúdio',
+    'about.field.name': 'Nome', 'about.field.title': 'Título',
+    'about.studio.desc': 'Descrição criativa', 'about.studio.photos': 'Fotos do estúdio',
+    'coop.title': 'Cooperação comercial', 'button.copy_email': 'Copiar email',
+    'button.cv_download': 'Baixar CV completo ↓',
+    'toast.cv': 'CV completo em breve', 'toast.email_copied': 'Email copiado'
+  },
+  /* Italiano */
+  it: {
+    'menu.home': 'Home', 'menu.works': 'Opere', 'menu.exhibitions': 'Mostre',
+    'menu.videos': 'Video', 'menu.about': 'Chi sono', 'menu.contact': 'Contatti',
+    'page.exhibitions': 'Mostre', 'page.videos': 'Sala Video',
+    'page.about': 'Chi sono', 'page.contact': 'Contatti',
+    'page.videos.sub': 'Creazione, mostre e dialoghi in video · Tocca un video per riprodurlo',
+    'detail.price': 'Prezzo', 'detail.series': 'Serie',
+    'detail.material': 'Materiale', 'detail.size': 'Dimensione', 'detail.year': 'Anno',
+    'status.on_sale': 'Disponibile', 'status.exhibition': 'In mostra',
+    'status.sold': 'Venduto', 'status.not_for_sale': '',
+    'filter.all': 'Tutti', 'empty.works': 'Nessuna opera in questa serie',
+    'empty.exhibitions': 'Nessuna mostra oggi', 'empty.videos': 'Nessun video in questa categoria',
+    'hint.swipe': '← Scorri per cambiare →', 'hint.gallery': 'Scorri per vedere altre immagini',
+    'hint.studio': 'Tocca una foto per ingrandire',
+    'about.tag.basic': 'Info', 'about.tag.philosophy': 'Filosofia',
+    'about.tag.experience': 'Percorso', 'about.tag.media': 'Media',
+    'about.tag.awards': 'Premi', 'about.tag.studio': 'CV e Studio',
+    'about.section.basic': 'Informazioni di base', 'about.section.philosophy': 'Filosofia artistica',
+    'about.section.experience': 'Formazione ed esperienza', 'about.section.media': 'Media e riconoscimenti',
+    'about.section.awards': 'Premi', 'about.section.studio': 'CV e Studio',
+    'about.field.name': 'Nome', 'about.field.title': 'Titolo',
+    'about.studio.desc': 'Descrizione creativa', 'about.studio.photos': 'Foto dello studio',
+    'coop.title': 'Cooperazione commerciale', 'button.copy_email': 'Copia email',
+    'button.cv_download': 'Scarica CV completo ↓',
+    'toast.cv': 'CV completo in arrivo', 'toast.email_copied': 'Email copiata'
+  }
+};
+
+/* 小白讲解：首页背景视频的全局引用。
+   render_home 创建 video 后会把它存到这里，方便在 doors 动效结束后
+   和路由切回首页时主动调用 play()，解决首次加载不自动播放的问题。 */
+var heroVideoEl = null;
+var heroVideoTryPlay = null;
+
+/* ============================================================
+   多语言翻译函数 t()
+   小白讲解：传一个 key（如 'hero.subtitle'），返回当前语言对应的文字。
+     三层回退：当前语言 → 中文 → 空字符串。
+     返回空字符串是为了让调用方的 || 能回退到实际数据（如 heroData.name）。
+     这样即使某些翻译缺失，页面也会显示实际数据，而不是 i18n key。
+   ============================================================ */
+function t(key) {
+  // 小白讲解：翻译拆分后，translations 不再放在 site.json 里，
+  //   而是单独存在 STATE.i18n（只装当前语言的一份翻译，约 23KB）。
+  //   中文模式（zh）时 STATE.i18n 是空对象，t() 找不到翻译会返回空字符串，
+  //   调用方用 || 回退到中文原文（如 heroData.name）。
+  if (!STATE.site) return '';
+  var cur = STATE.i18n || {};
+  if (cur[key] !== undefined) return cur[key];
+  // 中文是原文，不需要翻译，直接返回空让调用方回退
+  return '';
+}
+
+/**
+ * 按当前语言汇率转换价格
+ * 小白讲解：传入原价（如 "￥80000"）和语言代码（如 'en'），
+ *   自动按 site.json 里的汇率换算成对应货币。
+ *   中文模式直接返回原价，其他语言按汇率换算并加上货币符号。
+ *   比如原价 ￥80000，切换到英文后变成 $11,799，切换到法文变成 €10,351。
+ * @param {string} price - 原始价格字符串（如 "￥80000"）
+ * @param {string} lang - 语言代码（如 'zh'、'en'、'fr'）
+ * @returns {string} 转换后的价格字符串
+ */
+function formatPrice(price, lang) {
+  if (!price) return '';
+  // 提取数字部分（去掉￥、$、逗号、空格等非数字字符）
+  var num = parseFloat(String(price).replace(/[^\d.]/g, ''));
+  if (isNaN(num)) return price;  // 无法解析，返回原值
+  // 中文模式直接返回原价（保持 ￥80000 格式）
+  if (lang === 'zh') return price;
+  // 其他语言按汇率转换
+  var rates = (STATE.site && STATE.site.exchangeRates && STATE.site.exchangeRates.rates) || {};
+  var rateInfo = rates[lang];
+  if (!rateInfo || !rateInfo.rate) return price;  // 没有汇率信息，返回原值
+  var converted = num * rateInfo.rate;
+  // 格式化：千分位，不显示小数（四舍五入）
+  var formatted = Math.round(converted).toLocaleString('en-US');
+  return rateInfo.symbol + formatted;
+}
+
+/* ============================================================
+   数据加载：启动时 fetch 4 个 JSON 文件
+   小白讲解：网站打开时一次性把所有数据读进来，存到 STATE 里。
+     加 ?v=时间戳 防止浏览器缓存导致改了内容不生效。
+   ============================================================ */
+function loadData(callback) {
+  var loaded = 0;
+  var total = 4;
+  // 小白讲解：cacheBust 改成"按天变化"（如 ?v=20260715）。
+  //   之前用 Date.now()（毫秒级），每次刷新都不同，完全绕过缓存，
+  //   导致 227KB 的 site.json 每次都要重新下载，浪费带宽。
+  //   改成按天后，同一天内重复访问会命中浏览器/GitHub Pages 缓存（10分钟缓存），
+  //   第二天或部署新版本后自动更新。用户改了内容重新部署后，浏览器隔天或强刷即可看到。
+  var now = new Date();
+  var cacheBust = '?v=' + now.getFullYear() +
+                  String(now.getMonth() + 1).padStart(2, '0') +
+                  String(now.getDate()).padStart(2, '0');
+
+  function done() {
+    loaded++;
+    if (loaded >= total) {
+      // 4 个 JSON 加载完后，恢复上次选择的语言并加载对应翻译
+      // 小白讲解：拆分后翻译单独存在 data/i18n/{lang}.json，
+      //   默认中文（zh）不需要加载翻译文件（t() 找不到会回退到中文原文），
+      //   其他语言才需要 fetch 对应的翻译文件。
+      restoreSavedLang();
+      if (STATE.lang !== 'zh') {
+        loadI18n(STATE.lang, callback);
+      } else {
+        callback();
+      }
+    }
+  }
+
+  // 加载 site.json（已去掉翻译数据，只有 13KB 基础配置）
+  fetch('data/site.json' + cacheBust)
+    .then(function(r){ return r.json(); })
+    .then(function(d){ STATE.site = d; done(); })
+    .catch(function(e){ console.error('加载 site.json 失败:', e); done(); });
+
+  // 加载 works.json
+  fetch('data/works.json' + cacheBust)
+    .then(function(r){ return r.json(); })
+    .then(function(d){ STATE.works = (d.works || d) || []; done(); })
+    .catch(function(e){ console.error('加载 works.json 失败:', e); STATE.works = []; done(); });
+
+  // 加载 videos.json
+  fetch('data/videos.json' + cacheBust)
+    .then(function(r){ return r.json(); })
+    .then(function(d){ STATE.videos = (d.videos || d) || []; done(); })
+    .catch(function(e){ console.error('加载 videos.json 失败:', e); STATE.videos = []; done(); });
+
+  // 加载 timeline.json
+  fetch('data/timeline.json' + cacheBust)
+    .then(function(r){ return r.json(); })
+    .then(function(d){ STATE.timeline = (d.timeline || d) || []; done(); })
+    .catch(function(e){ console.error('加载 timeline.json 失败:', e); STATE.timeline = []; done(); });
+}
+
+/**
+ * 加载指定语言的翻译文件
+ * 小白讲解：拆分后每个语言的翻译单独存一个 JSON 文件（如 data/i18n/en.json）。
+ *   切换语言时调用这个函数，加载新语言的翻译到 STATE.i18n。
+ *   中文（zh）不需要翻译文件，直接清空 STATE.i18n（t() 会回退到中文原文）。
+ * @param {string} lang - 语言代码（如 'en'、'fr'、'ja'）
+ * @param {function} callback - 加载完成后的回调
+ */
+function loadI18n(lang, callback) {
+  if (lang === 'zh') {
+    // 中文模式：清空翻译，t() 会回退到中文原文
+    STATE.i18n = {};
+    if (callback) callback();
+    return;
+  }
+  var now = new Date();
+  var cacheBust = '?v=' + now.getFullYear() +
+                  String(now.getMonth() + 1).padStart(2, '0') +
+                  String(now.getDate()).padStart(2, '0');
+  fetch('data/i18n/' + lang + '.json' + cacheBust)
+    .then(function(r){ return r.json(); })
+    .then(function(d){ STATE.i18n = d || {}; if (callback) callback(); })
+    .catch(function(e){
+      console.error('加载翻译文件失败 (' + lang + '):', e);
+      STATE.i18n = {};   // 加载失败用空对象，t() 会回退到中文原文
+      if (callback) callback();
+    });
+}
+
+/* ============================================================
+   工具函数：图片路径处理
+   小白讲解：works.json 里图片路径可能是相对路径（images/works/...）
+     也可能是完整 URL（https://...）。这个函数统一处理。
+   ============================================================ */
+function resolveImg(path) {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('/')) return path;
+  return path;  // 相对路径直接返回
+}
+
+/* 响应式图片辅助：根据 images/responsive-manifest.js 的清单，
+   为某张图拼出 srcset（多档宽度）+ sizes + LQIP 模糊占位背景。
+   手机端浏览器会按视口宽度自动选最小够用的档，避免下载桌面级大图。
+   清单里没有的图片（如二维码）回退为原图、无 srcset。 */
+function respImg(path, sizes) {
+  var DEF = '(max-width:600px) 100vw,(max-width:1000px) 50vw,33vw';
+  var base = resolveImg(path);
+  var m = (window.__IMG_RESP__ || {})[path];
+  if (!m) return { src: base, srcset: '', sizes: sizes || DEF, lqip: '', w: 0, h: 0 };
+  var set = [];
+  var order = [480, 800, 1200];
+  for (var i = 0; i < order.length; i++) {
+    var k = String(order[i]);
+    if (m.s && m.s[k]) set.push(resolveImg(m.s[k]) + ' ' + k + 'w');
+  }
+  set.push(base + ' ' + (m.w || 1600) + 'w');
+  return {
+    src: base,
+    srcset: set.join(', '),
+    sizes: sizes || DEF,
+    lqip: m.lqip ? resolveImg(m.lqip) : '',
+    w: m.w || 0, h: m.h || 0
+  };
+}
+/* 给 img-wrap 容器拼 LQIP 模糊占位背景样式（有 lqip 时盖掉骨架屏 shimmer） */
+function lqipStyle(lqip) {
+  if (!lqip) return '';
+  return 'background-image:url(\'' + lqip + '\');background-size:cover;background-position:center;animation:none;';
+}
+
+/* ============================================================
+   工具函数：HTML 转义（防止用户输入的特殊字符破坏页面）
+   ============================================================ */
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* ============================================================
+   顶栏 / 菜单 / 语言卡片：共享交互逻辑
+   ============================================================ */
+var langBtn = document.getElementById('langBtn');
+var langCard = document.getElementById('langCard');
+var bottomNav = document.getElementById('bottomNav');
+var pageLabel = document.getElementById('pageLabel');
+var contactFab = document.getElementById('contactFab');
+
+function toggleLang(force) {
+  var open = force !== undefined ? force : !langBtn.classList.contains('open');
+  langBtn.classList.toggle('open', open);
+  langCard.classList.toggle('open', open);
+  // 直接设置 style，确保菜单显示/隐藏（防止 CSS class 优先级问题）
+  langCard.style.clipPath = open ? 'inset(0 0 0 0)' : 'inset(0 0 100% 0)';
+}
+
+langBtn.addEventListener('click', function() { toggleLang(); });
+langCard.addEventListener('click', function(e) { if (e.target === langCard) toggleLang(false); });
+
+/* 底部悬浮导航：点击切换路由（首页 / 作品 / 展览 / 关于），4 页常驻 */
+if (bottomNav) {
+  bottomNav.querySelectorAll('.nav-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var route = btn.getAttribute('data-route');
+      if (route === 'home') location.hash = '#/home';
+      else if (route === 'works') location.hash = '#/works';
+      else if (route === 'exhibitions') location.hash = '#/exhibitions';
+      else if (route === 'about') location.hash = '#/about';
+    });
+  });
+}
+
+/* 关于页右下角悬浮联系按钮 → 跳转到联系页 */
+if (contactFab) {
+  contactFab.addEventListener('click', function() { location.hash = '#/contact'; });
+}
+
+/* 语言切换：渲染语言列表 + 绑定点击事件
+   小白讲解：主网站的语言列表是根据用户在管理后台选择的 selectedLangs 动态渲染的。
+   中文永远在第一个，其他语言按 selectedLangs 的顺序排列。 */
+function renderLangList() {
+  var langList = document.getElementById('langList');
+  if (!langList || !STATE.site) return;
+  var selected = STATE.site.selectedLangs || ['en','fr','de','es','ru','ar'];
+  // 保留中文（第一个元素），删除其他语言
+  var zhItem = langList.querySelector('[data-lang="zh"]');
+  langList.innerHTML = '';
+  if (zhItem) langList.appendChild(zhItem);
+  // 按 selected 顺序渲染其他语言
+  selected.forEach(function(code) {
+    var meta = LANG_META[code];
+    if (!meta) return;
+    var item = document.createElement('div');
+    item.className = 'lang-item';
+    item.setAttribute('data-lang', code);
+    item.innerHTML = '<span class="flag">' + meta.flag + '</span><span class="name">' + meta.name + '</span><span class="tick">✓</span>';
+    langList.appendChild(item);
+  });
+  // 重新绑定点击事件
+  bindLangItemClicks();
+}
+
+/* 给所有语言项绑定点击事件 */
+function bindLangItemClicks() {
+  langCard.querySelectorAll('.lang-item').forEach(function(item) {
+    item.addEventListener('click', function() {
+      var lang = item.getAttribute('data-lang');
+      if (lang === STATE.lang) { toggleLang(false); return; }   // 同语言不重复加载
+      STATE.lang = lang;
+      try { localStorage.setItem('art-lang', lang); } catch(e) {}
+      langCard.querySelectorAll('.lang-item').forEach(function(i) { i.classList.remove('active'); });
+      item.classList.add('active');
+      langBtn.textContent = LANG_ABBR[lang] || 'CH';
+      toggleLang(false);
+      // 小白讲解：翻译拆分后，切换语言要重新加载对应的翻译文件。
+      //   加载完成后再清空 rendered 缓存并重新渲染，否则渲染时翻译还没加载完会显示中文。
+      loadI18n(lang, function() {
+        STATE.rendered = {};
+        router();
+        updateStaticText();
+      });
+    });
+  });
+}
+
+/* 恢复上次选择的语言（如果该语言还在 selectedLangs 里） */
+function restoreSavedLang() {
+  try {
+    var savedLang = localStorage.getItem('art-lang');
+    if (savedLang && savedLang !== 'zh') {
+      var selected = (STATE.site && STATE.site.selectedLangs) || ['en','fr','de','es','ru','ar'];
+      if (selected.indexOf(savedLang) === -1) {
+        // 语言不在列表里了，回退到中文
+        localStorage.removeItem('art-lang');
+        return;
+      }
+      STATE.lang = savedLang;
+      var savedItem = langCard.querySelector('.lang-item[data-lang="' + savedLang + '"]');
+      if (savedItem) {
+        langCard.querySelectorAll('.lang-item').forEach(function(i) { i.classList.remove('active'); });
+        savedItem.classList.add('active');
+        langBtn.textContent = LANG_ABBR[savedLang] || 'CH';
+      }
+    }
+  } catch(e) {}
+}
+
+/* ============================================================
+   更新静态文字（菜单、顶栏等带 data-i18n 的元素）
+   ============================================================ */
+function updateStaticText() {
+  // 顶栏艺术家姓名：无论切换到哪种语言，始终显示中文名（用户明确要求）。
+  //   不再走 t('site.navName') 翻译，直接用 site.json 的中文 navName 或硬编码回退。
+  var artistName = (STATE.site && STATE.site.site && STATE.site.site.navName) || '陈河田';
+  document.getElementById('artistName').textContent = artistName;
+  // 浏览器标签页标题
+  document.title = t('site.title') || (STATE.site && STATE.site.site && STATE.site.site.title) || '陈河田';
+
+  // 顶栏页面标签 / 作品·视频 Tab / 底部导航：页面名称随语言翻译（首页/作品/视频/展览/关于/联系）。
+  var curRoute = (location.hash || '#/home').replace(/^#\/?/, '') || 'home';
+  if (pageLabel) pageLabel.textContent = pageLabelText(curRoute);
+  var ttWorks = document.getElementById('topTabWorks');
+  var ttVideos = document.getElementById('topTabVideos');
+  if (ttWorks) ttWorks.textContent = pageLabelText('works');
+  if (ttVideos) ttVideos.textContent = pageLabelText('videos');
+  if (bottomNav) bottomNav.querySelectorAll('.nav-btn').forEach(function(b) {
+    var r = b.getAttribute('data-route');
+    var sp = b.querySelector('span:last-child');
+    if (sp && r) sp.textContent = pageLabelText(r);
+  });
+
+  // 小白讲解：更新所有带 data-i18n 属性的静态 UI 文字（菜单副标题、页面标题、弹窗标签等）。
+  //   这些文字写在前端 UI_TRANSLATIONS 翻译表里，切换语言时即时更新，不依赖后端翻译。
+  //   .cn 元素（如"首页""展览时间线"）永远显示中文，不在这里处理。
+  var ui = UI_TRANSLATIONS[STATE.lang] || UI_TRANSLATIONS.zh;
+  // data-i18n key → pages 翻译键的映射
+  // 小白讲解：前端用 data-i18n="page.exhibitions" 标记元素，
+  //   后端收集的翻译键是 pages.timeline.label 格式（管理后台可编辑）。
+  //   建立映射后，优先用后端翻译（用户在管理后台编辑过的内容），
+  //   查不到再回退到前端内置的 UI_TRANSLATIONS。
+  var PAGE_LABEL_MAP = {
+    'page.exhibitions': 'pages.timeline.label',
+    'page.about': 'pages.about.label',
+    'page.contact': 'pages.contact.label'
+  };
+  document.querySelectorAll('[data-i18n]').forEach(function(el) {
+    var key = el.getAttribute('data-i18n');
+    var text = '';
+    var pageKey = PAGE_LABEL_MAP[key];
+    if (pageKey) {
+      // 1. 优先查翻译（英文/法文等模式查到译文；中文模式查不到返回空）
+      text = t(pageKey);
+      // 2. 查不到翻译，用 pages 原文（site.json 里管理后台编辑的值）
+      if (!text) {
+        var parts = pageKey.split('.');
+        var obj = STATE.site;
+        for (var i = 0; i < parts.length; i++) {
+          obj = (obj && typeof obj === 'object') ? obj[parts[i]] : null;
+        }
+        if (typeof obj === 'string') text = obj;
+      }
+    }
+    // 3. 都查不到，用 UI_TRANSLATIONS（前端内置翻译表）
+    if (text) {
+      el.textContent = text;
+    } else if (ui[key] !== undefined && ui[key] !== '') {
+      el.textContent = ui[key];
+    }
+  });
+
+  // 页脚版权文字
+  // 小白讲解：页脚版权声明也要随语言切换。
+  //   优先用 t('footer.copyright') 查翻译（切换语言后显示译文），
+  //   查不到就用 site.json 里的中文原文，都没有就用硬编码默认值。
+  //   主站有 5 个页脚（作品/展览/视频/关于/联系页），用 class 统一更新。
+  var footerText = t('footer.copyright')
+    || (STATE.site && STATE.site.footer && STATE.site.footer.copyright)
+    || '© 2026 陈河田. All rights reserved.';
+  document.querySelectorAll('.site-footer').forEach(function(el) {
+    el.textContent = footerText;
+  });
+}
+
+/* ============================================================
+   顶栏高度实测（吸顶布局需要精确高度）
+   ============================================================ */
+var topbarEl = document.querySelector('.topbar');
+function updateTopbar() {
+  var h = topbarEl.offsetHeight;
+  document.documentElement.style.setProperty('--topbar-h', h + 'px');
+}
+
+/* ============================================================
+   门打开动效（仅首次访问播放一次）
+   小白讲解：用 sessionStorage 记住"已经播过了"，
+     这样用户在网站内来回切换不会每次都播。
+   ============================================================ */
+var lampIntro = document.getElementById('lampIntro');
+var workTitle = document.getElementById('workTitle');
+var titleText = document.getElementById('titleText');
+var hero = document.getElementById('home');
+var lampPlayed = false;
+
+function strokeAnimate() {
+  var len = 0;
+  try { len = titleText.getComputedTextLength(); } catch(e) {}
+  if (!len) len = 240;
+  titleText.style.strokeDasharray = len;
+  titleText.style.strokeDashoffset = len;
+  titleText.style.transition = 'stroke-dashoffset 2.6s ease, fill 1.2s ease 2.2s';
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      titleText.style.strokeDashoffset = 0;
+      titleText.style.fill = '#FFFFFF';
+    });
+  });
+  setTimeout(function() { workTitle.classList.add('shown'); }, 600);
+  setTimeout(function() { hero.classList.add('show-cue'); }, 1400);
+  setTimeout(function() { hero.classList.add('show-actions'); }, 1100);
+}
+
+/* ============================================================
+   进度加载开场动效（仅首次访问播放一次）
+   小白讲解：黑屏中显示画家名 + 一个 0% → 100% 的进度数字与进度条，
+     进度走到 100% 后整个黑幕自动向上滑走，首页从顶部下滑出现（无需点击）。
+     用 sessionStorage 记住"已经播过了"，网站内来回切换不会每次都播。
+   ============================================================ */
+function playLampIntro() {
+  if (!lampIntro || lampPlayed) return;
+  lampPlayed = true;
+  var pctEl = document.getElementById('introPct');
+  var barEl = document.getElementById('introBarFill');
+  lampIntro.classList.add('ready');        // 画家名淡入
+  var pct = 0, done = false;
+  function finish() {
+    if (done) return;
+    done = true;
+    lampIntro.classList.add('open');        // 黑幕上滑
+    hero.classList.add('reveal-content');   // 首页下滑出现
+    if (workTitle) workTitle.classList.add('shown');
+    strokeAnimate();                        // 标题描边动画
+    if (heroVideoTryPlay) heroVideoTryPlay();
+    setTimeout(function() { if (lampIntro) lampIntro.style.display = 'none'; }, 1100);
+  }
+  var timer = setInterval(function() {
+    // 逐步增长，接近满时放慢，营造真实加载感
+    var inc = pct < 78 ? (Math.random() * 7 + 4) : (Math.random() * 3 + 1.4);
+    pct = Math.min(100, pct + inc);
+    var shown = Math.floor(pct);
+    if (pctEl && pctEl.firstChild) pctEl.firstChild.nodeValue = String(shown);
+    if (barEl) barEl.style.width = pct + '%';
+    if (pct >= 100) {
+      clearInterval(timer);
+      setTimeout(finish, 520);              // 满格后短暂停留再进入
+    }
+  }, 90);
+}
+
+/* ============================================================
+   HOME 视图渲染
+   小白讲解：根据 site.json 的 hero.bgType 决定渲染图片还是视频。
+     标题文字、副标题、按钮全部从数据读取。
+   ============================================================ */
+function render_home() {
+  if (!STATE.site) return;
+  var heroData = STATE.site.hero || {};
+  var heroEl = document.getElementById('home');
+
+  // 移除旧的背景元素（图片或视频）
+  var oldImg = heroEl.querySelector('.hero-bg-img');
+  var oldVideo = heroEl.querySelector('.hero-video');
+  var oldLqip = heroEl.querySelector('.hero-lqip');
+  if (oldImg) oldImg.remove();
+  if (oldVideo) oldVideo.remove();
+  if (oldLqip) oldLqip.remove();
+
+  // 根据背景类型插入对应元素
+  var bgType = heroData.bgType || 'image';
+  var fallback = heroEl.querySelector('.art-fallback');
+
+  if (bgType === 'video' && heroData.bgVideo) {
+    // 视频背景
+    var isMobile = window.matchMedia('(max-width: 768px)').matches;
+    var video = document.createElement('video');
+    video.className = 'hero-video';
+    video.setAttribute('muted', '');
+    video.setAttribute('loop', '');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    // 小白讲解：preload 默认 'metadata'（只下视频头，省带宽）；移动端直接 'none'，
+    //   连头部都不下，彻底省掉 8.5MB 视频流量，仅用 poster 静态展示。
+    video.setAttribute('preload', isMobile ? 'none' : 'metadata');
+    // 小白讲解：poster 用 hero 图的 800 宽档（手机/桌面都更省），没有则回退原图。
+    var heroPoster = heroData.bgImage || '';
+    var hm = (window.__IMG_RESP__ || {})[heroPoster];
+    if (hm && hm.s && hm.s['800']) heroPoster = hm.s['800'];
+    if (heroPoster) video.setAttribute('poster', resolveImg(heroPoster));
+    // 移动端：不自动播放、不加载视频源，仅用 poster 静态展示，省下整段视频流量
+    if (!isMobile) {
+      video.setAttribute('autoplay', '');
+      var source = document.createElement('source');
+      source.src = resolveImg(heroData.bgVideo);
+      source.type = 'video/mp4';
+      video.appendChild(source);
+    }
+
+    // LQIP 模糊占位：视频/封面解码前先显示模糊小图，解码后淡出
+    var vLqipPath = (heroData.bgImage || '').replace(/\.(jpe?g|png|gif|bmp|tiff?|webp)$/i, '.lqip.webp');
+    var vLqip = document.createElement('div');
+    vLqip.className = 'hero-lqip';
+    vLqip.style.backgroundImage = 'url("' + resolveImg(vLqipPath) + '")';
+    vLqip.style.opacity = '1';
+    heroEl.insertBefore(vLqip, fallback.nextSibling);
+    heroEl.insertBefore(video, vLqip.nextSibling);
+    function fadeVLqip() { vLqip.style.opacity = '0'; }
+    video.addEventListener('loadeddata', fadeVLqip);
+    video.addEventListener('error', fadeVLqip);
+
+    // 小白讲解：视频自动播放需要"多管齐下"。
+    //   浏览器限制：JS 动态插入的 video 元素，光设 autoplay 属性不够，
+    //   必须在多个就绪事件后主动调用 play()。play() 返回 Promise，
+    //   可能被浏览器拒绝（如未 muted），用 catch 吞掉避免报错。
+    function tryPlay() {
+      var p = video.play();
+      if (p && p.catch) p.catch(function() {});
+    }
+    // 存到全局，方便 doors 动效结束后和路由切回首页时主动重试播放
+    heroVideoEl = video;
+    heroVideoTryPlay = tryPlay;
+    if (!isMobile) {
+      // 视频元数据加载完成后尝试播放
+      video.addEventListener('loadedmetadata', tryPlay);
+      // 视频可以播放时尝试播放
+      video.addEventListener('canplay', tryPlay);
+    }
+    // 视频数据加载完成后尝试播放
+    video.addEventListener('loadeddata', tryPlay);
+    // 立即尝试一次（部分浏览器此时已能播放）
+    tryPlay();
+    // 如果被暂停且不是自然结束，自动恢复播放
+    video.addEventListener('pause', function() {
+      if (!video.ended) {
+        setTimeout(tryPlay, 200);
+      }
+    });
+    // 页面切回前台时恢复播放（用户切走再切回的场景）
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) tryPlay();
+    });
+    // iOS 首次触摸时兜底播放
+    document.addEventListener('touchstart', function once() {
+      tryPlay();
+    }, { once: true });
+  } else if (bgType === 'video' && !heroData.bgVideo) {
+    // 选了视频但没有视频文件，回退到图片或渐变
+    console.warn('[HOME] bgType=video 但 bgVideo 为空，回退到渐变背景');
+    if (heroData.bgImage) insertHeroImage(heroEl, heroData.bgImage, fallback);
+  } else if (bgType === 'image' && heroData.bgImage) {
+    // 图片背景
+    insertHeroImage(heroEl, heroData.bgImage, fallback);
+  }
+  // 如果都没有，保留 .art-fallback 渐变
+
+  // 渲染标题
+  var name = t('hero.name') || heroData.name || '陈河田';
+  titleText.textContent = name;
+  // 自适应字号：中文/日文短名保持大字号；切换到英文/德文等字母语言时名字变长，
+  //   自动缩小字号，保证完整显示不被撑出屏幕（用户反馈的核心问题）。
+  fitHeroTitle();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHeroTitle);
+
+  // 渲染副标题
+  var subtitle = t('hero.subtitle') || heroData.subtitle || '';
+  document.getElementById('heroSubtitle').textContent = subtitle;
+
+  // 渲染按钮
+  var actionsEl = document.getElementById('heroActions');
+  var buttons = heroData.buttons || [];
+  var btnLinks = ['#/works', '#/about', '#/exhibitions'];  // 按钮对应的 hash 路由
+  var btnHtml = '';
+  for (var i = 0; i < buttons.length; i++) {
+    var btnText = t('hero.buttons.' + i) || buttons[i] || '';
+    var btnLink = btnLinks[i] || '#/home';
+    var cls = (i === 0) ? 'hero-btn primary' : 'hero-btn';
+    btnHtml += '<a class="' + cls + '" href="' + btnLink + '">' + esc(btnText) + '</a>';
+  }
+  actionsEl.innerHTML = btnHtml;
+
+  // 小白讲解：确保首页宣言与按钮一定淡入显示。
+  //   它们的可见性原本依赖"拉灯动效的 setTimeout"或"初始化 else 分支的 setTimeout"加 class，
+  //   一旦那条路径没走到（如刷新后走非首次分支、或拉灯未触发），就只剩常显白字的画家名字，
+  //   宣言和按钮全部隐身。这里在每次渲染首页时都补加一次 class，与拉灯动效互补，保证一定显示。
+  requestAnimationFrame(function() {
+    if (workTitle) workTitle.classList.add('shown');
+    if (hero) {
+      hero.classList.add('reveal-content', 'show-actions');
+      setTimeout(function() { hero.classList.add('show-cue'); }, 500);
+    }
+  });
+}
+
+/* 首页大标题（画家名）自适应字号：
+   小白讲解：SVG 文字用 text-anchor=middle 居中，viewBox 宽 300。中文名"陈河田"在
+     62 号字下刚好合适；切换到英文"Chen Hetian"、德文等更长的字母语言时会超过 300
+     被撑出屏幕。这里实测文字长度，超过安全宽度就按比例缩小字号，始终完整显示且居中。 */
+function fitHeroTitle() {
+  if (!titleText) return;
+  var BASE = 62;      // 中文默认字号
+  var MAXW = 286;     // 安全宽度（viewBox 用户单位，viewBox 宽 300 留边距）
+  var MIN = 22;       // 最小字号下限
+  titleText.setAttribute('font-size', BASE);
+  var len = 0;
+  try { len = titleText.getComputedTextLength(); } catch (e) { len = 0; }
+  if (len > MAXW) {
+    var fs = Math.max(MIN, Math.floor(BASE * MAXW / len));
+    titleText.setAttribute('font-size', fs);
+  }
+}
+
+function insertHeroImage(heroEl, imgPath, fallback) {
+  // 1) 先放一张 tiny 模糊占位图（LQIP），让首屏立刻有画面，感知上“秒开”
+  var lqipPath = (imgPath || '').replace(/\.(jpe?g|png|gif|bmp|tiff?|webp)$/i, '.lqip.webp');
+  var lqip = document.createElement('div');
+  lqip.className = 'hero-lqip';
+  lqip.style.backgroundImage = 'url("' + resolveImg(lqipPath) + '")';
+  lqip.style.opacity = '1';
+  heroEl.insertBefore(lqip, fallback.nextSibling);
+
+  // 2) 再放真实大图，加载完成后淡入，并把模糊占位淡出（大图失败则保留占位，不白屏）
+  var img = document.createElement('img');
+  img.className = 'hero-bg-img';
+  img.alt = '';
+  img.onload = function() {
+    img.style.opacity = '1';
+    lqip.style.opacity = '0';
+  };
+  img.onerror = function() {
+    lqip.style.opacity = '1';
+  };
+  img.src = resolveImg(imgPath);
+  heroEl.insertBefore(img, lqip.nextSibling);
+}
+
+/* ============================================================
+   WORKS 视图渲染（作品集）—— 照搬 ceshi/works.html 逻辑
+   小白讲解：从 STATE.works 读取作品数据，按字段映射渲染。
+     系列标签栏从 site.json 的 categories.worksSeries 动态生成。
+   ============================================================ */
+var worksScroll, worksList, emptyState, worksSections = [];
+/* 小白讲解：作品状态映射表。text 不再固定写中文，而是改成 key，
+   渲染时根据当前语言从 UI_TRANSLATIONS 查询对应文字。 */
+var worksStatusMap = {
+  'on_sale': { cls: 'status-collect', key: 'status.on_sale' },
+  'exhibition': { cls: 'status-show', key: 'status.exhibition' },
+  'sold': { cls: 'status-sold', key: 'status.sold' },
+  'not_for_sale': { cls: '', key: 'status.not_for_sale' }
+};
+
+function render_works() {
+  if (!STATE.site || STATE.rendered.works) return;
+  STATE.rendered.works = true;
+
+  var seriesTrack = document.getElementById('seriesTrack');
+  var gallery = document.getElementById('worksGallery');
+  var emptyEl = document.getElementById('emptyState');
+  if (!gallery || !seriesTrack) return;
+
+  // ---- 系列标签栏（横滑） ----
+  var series = (STATE.site.categories && STATE.site.categories.worksSeries) || [];
+  // 小白讲解："全部"按钮文字从 UI_TRANSLATIONS 查询，data-series="all" 值不变只改显示。
+  var uiAll = (UI_TRANSLATIONS[STATE.lang] || UI_TRANSLATIONS.zh)['filter.all'];
+  var tagHtml = '<button class="series-tag active" data-series="all">' + esc(uiAll) + '</button>';
+  series.forEach(function(s, i) {
+    if (s && s !== 'all') {
+      // 小白讲解：显示文字用翻译查询（t('categories.worksSeries.1') 等），查不到回退中文。
+      //   data-series 保持用中文 s，因为作品的 series 字段存的是中文，过滤时要匹配。
+      var label = t('categories.worksSeries.' + i) || s;
+      tagHtml += '<button class="series-tag" data-series="' + esc(s) + '">' + esc(label) + '</button>';
+    }
+  });
+  seriesTrack.innerHTML = tagHtml;
+
+  // ---- 渲染小红书式双列卡片（CSS columns 自动错落排版） ----
+  var worksRevealObs = null;
+  var currentSeries = 'all';
+
+  function buildCard(w, i) {
+    var img = resolveImg(w.image || w.thumbnail || '');
+    var ir = respImg(img);
+    if (!img) { console.warn('[WORKS] 作品 ' + (w.title || i) + ' 缺少图片，已跳过'); return null; }
+    // 小白讲解：翻译键必须用作品的 id（如 works.2.title），不能用数组下标。
+    var name = t('works.' + w.id + '.title') || w.title || '';
+    var seriesAttr = esc(w.series || '');
+    var id = w.id != null ? w.id : i;
+    var card = document.createElement('div');
+    card.className = 'wg-card reveal';
+    card.setAttribute('data-series', seriesAttr);
+    card.setAttribute('data-id', id);
+    card.style.setProperty('--d', ((i % 6) * 0.05) + 's');
+    card.innerHTML =
+      '<div class="wg-img img-wrap" style="' + lqipStyle(ir.lqip) + '"><img class="img-fade" src="' + esc(ir.src) + '" srcset="' + esc(ir.srcset) + '" sizes="' + esc(ir.sizes) + '" alt="' + esc(name) + '" loading="lazy" decoding="async" onload="this.classList.add(\'loaded\')" onerror="this.classList.add(\'is-error\')"></div>'
+      + '<div class="wg-info"><div class="wg-name">' + esc(name) + '</div>'
+      + (seriesAttr ? '<span class="wg-series">' + seriesAttr + '</span>' : '')
+      + '</div>';
+    return card;
+  }
+
+  function renderList() {
+    gallery.innerHTML = '';
+    var any = false;
+    STATE.works.forEach(function(w, i) {
+      if (currentSeries !== 'all' && w.series !== currentSeries) return;
+      var card = buildCard(w, i);
+      if (!card) return;
+      any = true;
+      gallery.appendChild(card);
+    });
+    emptyEl.style.display = any ? 'none' : 'flex';
+    // 入场：进入视口逐个淡入上浮（IntersectionObserver）
+    requestAnimationFrame(function() {
+      var cards = gallery.querySelectorAll('.wg-card');
+      if (worksRevealObs) worksRevealObs.disconnect();
+      worksRevealObs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(e) {
+          if (e.isIntersecting) { e.target.classList.add('in'); worksRevealObs.unobserve(e.target); }
+        });
+      }, { root: document.getElementById('worksScroll'), threshold: 0.06 });
+      cards.forEach(function(c) { worksRevealObs.observe(c); });
+    });
+  }
+
+  renderList();
+
+  // 卡片点击 → 作品详情（复用原作品详情弹窗布局）
+  gallery.addEventListener('click', function(ev) {
+    var card = ev.target.closest('.wg-card');
+    if (card) openWorkDetail(card.getAttribute('data-id'));
+  });
+
+  // 系列筛选
+  seriesTrack.querySelectorAll('.series-tag').forEach(function(tag) {
+    tag.addEventListener('click', function() {
+      seriesTrack.querySelectorAll('.series-tag').forEach(function(x) { x.classList.remove('active'); });
+      tag.classList.add('active');
+      currentSeries = tag.getAttribute('data-series');
+      renderList();
+    });
+  });
+
+  // 作品 / 视频 切换标签（首次渲染后接线）
+  wireWorksTabs();
+
+  // 实测子栏高度写入 --bar-h（吸顶布局需要精确高度）
+  function updateWorksBarHeight() {
+    var bar = document.getElementById('worksSubbar');
+    if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px');
+  }
+  updateWorksBarHeight();
+  window.addEventListener('resize', updateWorksBarHeight);
+  window.addEventListener('load', updateWorksBarHeight);
+  setTimeout(updateWorksBarHeight, 400);  // 字体异步加载后再测一次
+}
+
+/* 作品页：作品 / 视频 标签切换（显示对应面板与标签行） */
+function setWorksTab(tab) {
+  var panelWorks = document.getElementById('panelWorks');
+  var panelVideos = document.getElementById('panelVideos');
+  var seriesTrack = document.getElementById('seriesTrack');
+  var videoTrack = document.getElementById('videoTrack');
+  var isVideos = (tab === 'videos');
+  if (panelWorks) panelWorks.classList.toggle('active', !isVideos);
+  if (panelVideos) panelVideos.classList.toggle('active', isVideos);
+  if (seriesTrack) seriesTrack.style.display = isVideos ? 'none' : '';
+  if (videoTrack) videoTrack.style.display = isVideos ? '' : 'none';
+  // 切换到视频页时，重新触发卡片淡入观察（视频面板原先隐藏，观察器需重新计算可见性）
+  if (isVideos) requestAnimationFrame(observeVideoReveals);
+  // 顶栏标签同步高亮（作品页顶栏的 作品/视频）
+  var topTabWorks = document.getElementById('topTabWorks');
+  var topTabVideos = document.getElementById('topTabVideos');
+  if (topTabWorks) topTabWorks.classList.toggle('active', !isVideos);
+  if (topTabVideos) topTabVideos.classList.toggle('active', isVideos);
+}
+
+function wireWorksTabs() {
+  var topTabWorks = document.getElementById('topTabWorks');
+  var topTabVideos = document.getElementById('topTabVideos');
+  if (topTabWorks) topTabWorks.addEventListener('click', function() { setWorksTab('works'); });
+  if (topTabVideos) topTabVideos.addEventListener('click', function() { setWorksTab('videos'); });
+}
+
+/* 作品详情打开 */
+function openWorkDetail(id) {
+  var w = STATE.works.filter(function(x) { return String(x.id) === String(id); })[0];
+  if (!w) return;
+  var idx = STATE.works.indexOf(w);
+  // 小白讲解：弹窗不再展示图片，所以不再需要 img 变量了。
+  //   作品图在列表卡片里已经能看到，弹窗只展示文字信息更轻快。
+  // 小白讲解：翻译键用 w.id（和后端保存翻译时的键一致），idx 只用于其他用途。
+  var name = t('works.' + w.id + '.title') || w.title || '';
+  // 注意：后端 manage.py 收集作品描述时用的键名是 description（不是 desc），
+  //   所以前端查询也要用 description，否则键名不匹配会查不到翻译。
+  var desc = t('works.' + w.id + '.description') || w.description || '';
+  var st = worksStatusMap[w.status] || { cls: '', key: '' };
+  // 小白讲解：价格按当前语言汇率转换。中文显示原价（￥80000），英文显示美元（$11,799），法文显示欧元（€10,351）等。
+  var price = formatPrice(w.price, STATE.lang);
+  var series = t('works.' + w.id + '.series') || w.series || '';
+  var material = t('works.' + w.id + '.material') || w.material || '';
+  var size = w.size || '';
+  var year = w.year || '';
+
+  document.getElementById('detailName').textContent = name;
+  var stEl = document.getElementById('detailStatus');
+  // 小白讲解：状态文字从 UI_TRANSLATIONS 查询当前语言对应的文字。
+  var ui = UI_TRANSLATIONS[STATE.lang] || UI_TRANSLATIONS.zh;
+  stEl.textContent = (st.key && ui[st.key]) ? ui[st.key] : '';
+  stEl.className = 'detail-status ' + st.cls;
+  if (!stEl.textContent) stEl.style.display = 'none'; else stEl.style.display = '';
+  document.getElementById('detailPrice').textContent = price;
+  document.getElementById('detailSeries').textContent = series;
+  document.getElementById('detailMaterial').textContent = material;
+  document.getElementById('detailSize').textContent = size;
+  document.getElementById('detailYear').textContent = year;
+  document.getElementById('detailDesc').textContent = desc;
+
+  // 高清大图：只在用户点开弹窗这一刻才赋 src 触发下载（懒加载），
+  //   列表滚动/首屏都不会预载这些大图。用 respImg 取响应式大图（比缩略图清晰）。
+  var fullWrap = document.getElementById('detailFullWrap');
+  var fullImg = document.getElementById('detailFullImg');
+  var bigPath = w.image || w.thumbnail || '';
+  fullImg.classList.remove('loaded', 'is-error');
+  fullImg.removeAttribute('src');
+  fullImg.removeAttribute('srcset');
+  fullWrap.style.aspectRatio = '';
+  if (bigPath) {
+    var ri = respImg(bigPath, '(max-width:600px) 92vw, 440px');
+    // 用 LQIP 作模糊占位（无 LQIP 时保留 img-wrap 骨架屏微光），并按原图比例预留高度防止布局跳动
+    fullWrap.style.cssText = lqipStyle(ri.lqip);
+    fullWrap.style.display = '';
+    if (ri.w && ri.h) fullWrap.style.aspectRatio = ri.w + '/' + ri.h;
+    fullImg.alt = name;
+    fullImg.onload = function() { this.classList.add('loaded'); };
+    fullImg.onerror = function() { this.classList.add('is-error'); };
+    if (ri.srcset) fullImg.setAttribute('srcset', ri.srcset);
+    fullImg.setAttribute('sizes', ri.sizes);
+    fullImg.src = ri.src;
+  } else {
+    fullWrap.style.display = 'none';
+  }
+
+  var overlay = document.getElementById('detailOverlay');
+  overlay.scrollTop = 0;
+  overlay.classList.add('show');
+  document.getElementById('detailClose').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeWorkDetail() {
+  document.getElementById('detailOverlay').classList.remove('show');
+  document.getElementById('detailClose').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('detailClose').addEventListener('click', closeWorkDetail);
+document.getElementById('detailOverlay').addEventListener('click', function(e) { if (e.target === this) closeWorkDetail(); });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { closeWorkDetail(); closePlay(); closeGallery(); } });
+
+/* ============================================================
+   EXHIBITIONS 视图渲染（展览时间线）—— 照抄 exhibitions.html 逻辑
+   小白讲解：从 STATE.timeline 读展览数据，按年份分组。年份标签吸顶横滑可筛选，
+     每张展览卡片占满一屏（scroll-snap 整幅切换），含日期/名称/标签/描述/3列缩略图。
+     点缩略图打开通用图片查看器 openGallery()，左右滑动看现场图。
+   ============================================================ */
+var exhScroll, exhList, exhEmpty, exhSections = [], exhRevealObs = null;
+
+function render_exhibitions() {
+  if (!STATE.site || STATE.rendered.exhibitions) return;
+  STATE.rendered.exhibitions = true;
+
+  var exhScroll = document.getElementById('exhScroll');
+  var exhList = document.getElementById('exhList');
+  var exhEmpty = document.getElementById('exhEmpty');
+  var exhTrack = document.getElementById('exhTrack');
+  if (!exhList || !exhTrack) return;
+
+  // 没有数据时显示空状态
+  if (!STATE.timeline.length) {
+    exhList.innerHTML = '';
+    exhEmpty.style.display = 'flex';
+    return;
+  }
+
+  // ---- 生成年份标签（从 timeline 提取去重，降序排列） ----
+  var yearSet = {};
+  STATE.timeline.forEach(function(tl) {
+    var y = tl.year || '';
+    if (y && !yearSet[y]) yearSet[y] = true;
+  });
+  var years = Object.keys(yearSet).sort(function(a, b) { return b.localeCompare(a); });
+  // 小白讲解："全部"按钮文字从 UI_TRANSLATIONS 查询，data-year="all" 值不变。
+  var uiAllExh = (UI_TRANSLATIONS[STATE.lang] || UI_TRANSLATIONS.zh)['filter.all'];
+  var tagHtml = '<button class="year-tag active" data-year="all">' + esc(uiAllExh) + '</button>';
+  years.forEach(function(y) {
+    tagHtml += '<button class="year-tag" data-year="' + esc(y) + '">' + esc(y) + '</button>';
+  });
+  exhTrack.innerHTML = tagHtml;
+
+  // ---- 生成朋友圈式展览卡片（头像 + 昵称 + 日期 + 正文 + 九宫格 + 分割线） ----
+  var name = t('site.navName') || (STATE.site && STATE.site.site && STATE.site.site.navName) || '陈河田';
+  var fallbackAvatar = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='42' height='42'><circle cx='21' cy='21' r='21' fill='%23151010'/></svg>";
+  var html = '';
+  STATE.timeline.forEach(function(tl, idx) {
+    var year = tl.year || '';
+    var date = tl.date || year || '';
+    // 小白讲解：翻译键用 tl.id（和后端保存翻译时的键一致），不能用 idx。
+    var title = t('timeline.' + tl.id + '.title') || tl.title || '';
+    var desc = t('timeline.' + tl.id + '.desc') || tl.desc || '';
+    // 小白讲解：展览标签 tag 也要翻译（后端已收集 timeline.{id}.tag）。
+    var tag = t('timeline.' + tl.id + '.tag') || tl.tag || '';
+    var images = tl.images || [];
+    var id = tl.id != null ? tl.id : idx;
+    var avatar = tl.avatar ? resolveImg(tl.avatar) : '';
+
+    html += '<section class="exh-section" data-year="' + esc(year) + '" data-id="' + esc(id) + '">'
+      + '<div class="exh-card mom reveal">'
+      + '<div class="exh-mom-head">'
+      + '<img class="exh-avatar" src="' + esc(avatar || fallbackAvatar) + '" alt="' + esc(name) + '">'
+      + '<div class="exh-mom-meta"><span class="exh-mom-name">' + esc(name) + '</span>'
+      + '<span class="exh-mom-date">' + esc(date) + (tag ? ' · ' + esc(tag) : '') + '</span></div>'
+      + '</div>'
+      + '<div class="exh-mom-title">' + esc(title) + '</div>'
+      + (desc ? '<div class="exh-mom-desc">' + esc(desc) + '</div>' : '');
+    // 最多展示 9 张缩略图；点开查看器可看全部（管理员可上传超过 9 张）
+    if (images.length) {
+      var shown = images.slice(0, 9);
+      html += '<div class="exh-mom-grid">';
+      shown.forEach(function(img, i) {
+        var ir = respImg(img);
+        html += '<div class="exh-thumb img-wrap" data-exh="' + esc(id) + '" data-idx="' + i + '" style="' + lqipStyle(ir.lqip) + '">'
+          // 小白讲解：loading="lazy" 让浏览器只在图片即将进入视口时才下载；onload 加 .loaded 淡入。
+          + '<img class="img-fade" src="' + esc(ir.src) + '" srcset="' + esc(ir.srcset) + '" sizes="' + esc(ir.sizes) + '" alt="' + esc(title) + ' 现场' + (i + 1) + '" loading="lazy" decoding="async" onload="this.classList.add(\'loaded\')" onerror="this.classList.add(\'is-error\')">'
+          + '</div>';
+      });
+      html += '</div>';
+      if (images.length > 9) html += '<div class="exh-mom-more">+ ' + (images.length - 9) + ' 张</div>';
+    }
+    html += '<div class="exh-mom-divider"></div>'
+      + '</div></section>';
+  });
+  exhList.innerHTML = html;
+
+  exhSections = [].slice.call(exhList.querySelectorAll('.exh-section'));
+
+  // 逐张淡入（进入视口才加 .in，与作品/视频页一致）
+  if (exhRevealObs) exhRevealObs.disconnect();
+  exhRevealObs = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) { e.target.classList.add('in'); exhRevealObs.unobserve(e.target); }
+    });
+  }, { root: document.getElementById('exhScroll'), threshold: 0.08 });
+  exhList.querySelectorAll('.exh-card.mom').forEach(function(c) { exhRevealObs.observe(c); });
+
+  // ---- 实测筛选栏高度写入 --bar-h（吸顶布局需要精确高度） ----
+  updateExhBarHeight();
+
+  // ---- 年份筛选 ----
+  var tags = exhTrack.querySelectorAll('.year-tag');
+  tags.forEach(function(tag) {
+    tag.addEventListener('click', function() {
+      tags.forEach(function(x) { x.classList.remove('active'); });
+      tag.classList.add('active');
+      var sel = tag.getAttribute('data-year');
+      var any = false;
+      exhSections.forEach(function(s) {
+        var match = (sel === 'all') || s.getAttribute('data-year') === sel;
+        s.classList.toggle('hidden', !match);
+        if (match) any = true;
+      });
+      exhEmpty.style.display = any ? 'none' : 'flex';
+      // 入场动效：错落淡入
+      exhSections.forEach(function(s) { s.classList.remove('entering'); });
+      void exhList.offsetWidth;   // 触发重排，确保动画从头播放
+      var visible = exhSections.filter(function(s) { return !s.classList.contains('hidden'); });
+      visible.forEach(function(s, i) {
+        s.style.setProperty('--enter-d', (i * 0.08) + 's');
+        s.classList.add('entering');
+        setTimeout(function() { s.classList.remove('entering'); }, (i * 0.08 + 0.8) * 1000);
+      });
+    });
+  });
+
+  // ---- 缩略图点击 → 打开通用图片查看器（传入全部图片，可左右滑动看更多） ----
+  exhList.addEventListener('click', function(ev) {
+    var th = ev.target.closest('.exh-thumb');
+    if (!th) return;
+    var id = th.getAttribute('data-exh');
+    var idx = parseInt(th.getAttribute('data-idx'), 10) || 0;
+    var tl = STATE.timeline.filter(function(x) { return String(x.id) === String(id); })[0];
+    if (!tl) return;
+    // 小白讲解：翻译键用 tl.id，不能用 realIdx（数组下标）。
+    var title = t('timeline.' + tl.id + '.title') || tl.title || '';
+    var date = tl.date || tl.year || '';
+    // 小白讲解：tag 也要翻译，和卡片显示保持一致。
+    var tag = t('timeline.' + tl.id + '.tag') || tl.tag || '';
+    var sub = date + (tag ? ' · ' + tag : '');
+    openGallery(tl.images || [], idx, title, sub);
+  });
+}
+
+/* 实测展览筛选栏高度，写入 --bar-h（exh-page 的 padding-top 依赖它） */
+function updateExhBarHeight() {
+  var bar = document.getElementById('exhBar');
+  if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px');
+}
+
+/* ============================================================
+   VIDEOS 视图渲染（视频瀑布流）—— 照抄 video.html 逻辑
+   小白讲解：从 STATE.videos 读视频数据，生成 2 列瀑布流（小红书式错落）。
+     圆形播放按钮，点开内嵌 B 站播放器直接看，不用跳转。
+     缩略图用 aspect-ratio 预留高度，所以可以即时比较两列高度分配新卡片到较矮的列。
+   ============================================================ */
+var currentVideoCat = 'all';
+var videoRevealObs = null;
+var AR_RATIOS = ['3/4', '1/1', '4/5'];   // 缩略图宽高比循环（制造错落）
+
+function render_videos() {
+  if (!STATE.site || STATE.rendered.videos) return;
+  STATE.rendered.videos = true;
+
+  var videoTrack = document.getElementById('videoTrack');
+  if (!videoTrack) return;
+
+  // 分类标签：从 site.categories.videos 读取（中文分类名作为 data-cat，与 v.category 直接匹配）
+  // 小白讲解："全部"按钮文字从 UI_TRANSLATIONS 查询，data-cat="all" 值不变。
+  var cats = (STATE.site.categories && STATE.site.categories.videos) || [];
+  var uiAll2 = (UI_TRANSLATIONS[STATE.lang] || UI_TRANSLATIONS.zh)['filter.all'];
+  var catHtml = '<button class="cat-tag active" data-cat="all">' + esc(uiAll2) + '</button>';
+  cats.forEach(function(c, i) {
+    if (c && c !== 'all') {
+      // 小白讲解：显示文字用翻译查询（t('categories.videos.1') 等），
+      //   查到翻译就用译文，查不到就回退到中文原名。
+      //   data-cat 属性保持用中文 c，因为视频的 category 字段存的是中文，过滤时要匹配。
+      var label = t('categories.videos.' + i) || c;
+      catHtml += '<button class="cat-tag" data-cat="' + esc(c) + '">' + esc(label) + '</button>';
+    }
+  });
+  videoTrack.innerHTML = catHtml;
+
+  // 分类筛选
+  var tags = videoTrack.querySelectorAll('.cat-tag');
+  tags.forEach(function(tag) {
+    tag.addEventListener('click', function() {
+      tags.forEach(function(x) { x.classList.remove('active'); });
+      tag.classList.add('active');
+      currentVideoCat = tag.getAttribute('data-cat');
+      renderVideoList();
+      var scroller = document.getElementById('worksScroll');
+      if (scroller) scroller.scrollTop = 0;
+    });
+  });
+
+  // 实测子栏高度写入 --bar-h
+  updateVideoBarHeight();
+
+  renderVideoList();
+}
+
+/* 渲染视频卡片列表（与「作品」页同款：小红书式双列卡片，图 + 名称 + 分类） */
+function renderVideoList() {
+  var gallery = document.getElementById('videoGallery');
+  var emptyEl = document.getElementById('videoEmpty');
+  var feed = document.getElementById('worksScroll');
+  if (!gallery) return;
+
+  gallery.innerHTML = '';
+
+  var list = STATE.videos.filter(function(v) {
+    return currentVideoCat === 'all' || v.category === currentVideoCat;
+  });
+
+  if (!list.length) {
+    emptyEl.style.display = 'flex';
+    gallery.style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  gallery.style.display = '';
+
+  list.forEach(function(v, i) {
+    var card = buildVideoCard(v, i);
+    if (card) gallery.appendChild(card);
+  });
+
+  observeVideoReveals();
+}
+
+/* 观察视频卡片，进入视口逐个淡入（与作品页一致） */
+function observeVideoReveals() {
+  var gallery = document.getElementById('videoGallery');
+  var feed = document.getElementById('worksScroll');
+  if (!gallery) return;
+  if (videoRevealObs) videoRevealObs.disconnect();
+  videoRevealObs = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) { e.target.classList.add('in'); videoRevealObs.unobserve(e.target); }
+    });
+  }, { root: feed, threshold: 0.06 });
+  gallery.querySelectorAll('.wg-card').forEach(function(c) { videoRevealObs.observe(c); });
+}
+
+/* 构建单个视频卡片（与作品卡片同款 .wg-card：图 + 名称 + 分类，叠加播放角标） */
+function buildVideoCard(v, i) {
+  var realIdx = STATE.videos.indexOf(v);
+  // 小白讲解：翻译键用 v.id（和后端保存翻译时的键一致），不能用 realIdx。
+  var title = t('videos.' + v.id + '.title') || v.title || '';
+  var cover = resolveImg(v.cover || '');
+  // 小白讲解：视频分类也要翻译（后端已收集 videos.{id}.category）。
+  var cat = t('videos.' + v.id + '.category') || v.category || '';
+  var id = v.id != null ? v.id : realIdx;
+
+  var card = document.createElement('div');
+  card.className = 'wg-card reveal';
+  card.setAttribute('data-type', 'video');
+  card.setAttribute('data-id', id);
+  card.style.setProperty('--d', ((i % 6) * 0.05) + 's');
+  var cr = respImg(cover);
+  card.innerHTML =
+    '<div class="wg-img img-wrap" style="' + lqipStyle(cr.lqip) + '">'
+      // 小白讲解：视频封面加 lazy，打开视频页不会一次性下载所有封面；
+      //   onload 加 .loaded 触发淡入，onerror 用渐变占位避免破图。
+      + (cr.src ? '<img class="img-fade" src="' + esc(cr.src) + '" srcset="' + esc(cr.srcset) + '" sizes="' + esc(cr.sizes) + '" alt="' + esc(title) + '" loading="lazy" decoding="async" onload="this.classList.add(\'loaded\')" onerror="this.classList.add(\'is-error\')">' : '<div style="position:absolute;inset:0;background:linear-gradient(145deg,#E5E5EA,#DFDFE4);"></div>')
+      + '<span class="wg-play" aria-hidden="true"></span>'
+    + '</div>'
+    + '<div class="wg-info"><div class="wg-name">' + esc(title) + '</div>'
+    + (cat ? '<span class="wg-series">' + esc(cat) + '</span>' : '')
+    + '</div>';
+  return card;
+}
+
+/* 视频播放弹窗：内嵌 B 站播放器，点击直接播放 */
+function openPlay(id) {
+  var v = STATE.videos.filter(function(x) { return String(x.id) === String(id); })[0];
+  if (!v || !v.bvid) return;
+  var realIdx = STATE.videos.indexOf(v);
+  // 小白讲解：翻译键用 v.id（和后端保存翻译时的键一致），不能用 realIdx。
+  var title = t('videos.' + v.id + '.title') || v.title || '';
+  document.getElementById('playTitle').textContent = title;
+  document.getElementById('playChip').textContent = t('videos.' + v.id + '.category') || v.category || '';
+  // 哔哩哔哩纯净内嵌播放器：用 blackboard/html5mobileplayer.html 而不是 player.html
+  // 小白讲解：
+  //   1. 旧的 player.bilibili.com 会显示"你感兴趣的视频都在 B 站"引导页，
+  //      把人导去 B 站主站，结果嵌入页里看不到视频；
+  //   2. 换成 blackboard/html5mobileplayer.html 纯净版播放器，不带任何跳转按钮，
+  //      也不会出现"你感兴趣的视频都在 B 站"的引导页；
+  //   3. autoplay=0 不自动播放（浏览器会拦截自动播放，用户需要点一下才播）；
+  //   4. sandbox 禁用任何跳转，避免点击视频时被带到 B 站。
+  document.getElementById('playVideoBox').innerHTML =
+    '<iframe src="https://www.bilibili.com/blackboard/html5mobileplayer.html?bvid=' + esc(v.bvid) + '&page=1&high_quality=1&danmaku=0&autoplay=0" '
+    + 'scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true" '
+    + 'sandbox="allow-top-navigation allow-same-origin allow-forms allow-scripts allow-popups allow-presentation"></iframe>';
+  document.getElementById('playOverlay').classList.add('show');
+  document.getElementById('playClose').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+/* 关闭视频播放弹窗：清空 iframe 停止播放并释放资源 */
+function closePlay() {
+  document.getElementById('playOverlay').classList.remove('show');
+  document.getElementById('playClose').classList.remove('show');
+  document.getElementById('playVideoBox').innerHTML = '';
+  // 仅当作品详情和图片查看器都没打开时，才恢复页面滚动
+  if (!document.getElementById('detailOverlay').classList.contains('show') && !document.getElementById('galleryOverlay').classList.contains('show')) {
+    document.body.style.overflow = '';
+  }
+}
+
+/* 绑定视频弹窗事件 + 卡片点击委托 */
+(function bindVideoEvents() {
+  var playClose = document.getElementById('playClose');
+  var playOverlay = document.getElementById('playOverlay');
+  var gallery = document.getElementById('videoGallery');
+  if (playClose) playClose.addEventListener('click', closePlay);
+  if (playOverlay) playOverlay.addEventListener('click', function(e) { if (e.target === playOverlay) closePlay(); });
+  // 卡片点击委托：点任意视频卡片打开播放弹窗
+  if (gallery) {
+    gallery.addEventListener('click', function(ev) {
+      var card = ev.target.closest('.wg-card');
+      if (card && card.getAttribute('data-type') === 'video') openPlay(card.getAttribute('data-id'));
+    });
+  }
+})();
+
+/* 实测作品页子栏高度，写入 --bar-h（works-scroller 的 padding-top 依赖它） */
+function updateVideoBarHeight() {
+  var bar = document.getElementById('worksSubbar');
+  if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px');
+}
+
+/* ============================================================
+   ABOUT 视图渲染（关于）—— 照抄 about.html
+   小白讲解：固定页头（标题+6标签），滚动区有 6 个 section（基本信息/艺术理念/
+     学历与经历/媒体与评价/获奖记录/CV与工作室），逐块 reveal 淡入，
+     工作室照片点击打开通用图片查看器 openGallery()。
+   ============================================================ */
+function render_about() {
+  if (!STATE.site || STATE.rendered.about) return;
+  STATE.rendered.about = true;
+
+  var about = STATE.site.about || {};
+  var feed = document.getElementById('aboutFeed');
+  var tagsBox = document.getElementById('aboutTags');
+  var content = document.getElementById('aboutContent');
+  if (!feed || !tagsBox || !content) return;
+
+  /* 6 个标签定义（data-target 对应 section 的 id）
+     小白讲解：name 不再写死中文，而是改成 i18nKey，
+     渲染时根据当前语言从 UI_TRANSLATIONS 查询对应文字。 */
+  var tags = [
+    { target: 'basic', i18nKey: 'about.tag.basic' },
+    { target: 'philosophy', i18nKey: 'about.tag.philosophy' },
+    { target: 'experience', i18nKey: 'about.tag.experience' },
+    { target: 'media', i18nKey: 'about.tag.media' },
+    { target: 'awards', i18nKey: 'about.tag.awards' },
+    { target: 'studio', i18nKey: 'about.tag.studio' }
+  ];
+
+  /* 渲染标签栏（小白讲解：标签文字从 UI_TRANSLATIONS 查询当前语言） */
+  var uiAbout = UI_TRANSLATIONS[STATE.lang] || UI_TRANSLATIONS.zh;
+  tagsBox.innerHTML = tags.map(function(tg, i) {
+    var label = uiAbout[tg.i18nKey] || '';
+    return '<button class="about-tag' + (i === 0 ? ' active' : '') + '" data-target="' + tg.target + '">' + esc(label) + '</button>';
+  }).join('');
+
+  var html = '';
+
+  /* ===== 1. 基本信息 ===== */
+  html += '<section class="about-section" id="basic">';
+  html += '<h2 class="sec-head reveal">' + esc(uiAbout['about.section.basic']) + '</h2>';
+  if (about.portrait) {
+    var pir = respImg(about.portrait);
+    html += '<div class="portrait reveal img-wrap" style="' + lqipStyle(pir.lqip) + '"><img class="img-fade" src="' + esc(pir.src) + '" srcset="' + esc(pir.srcset) + '" sizes="' + esc(pir.sizes) + '" alt="' + esc(about.name || '') + '" loading="lazy" decoding="async" onload="this.classList.add(\'loaded\')" onerror="this.classList.add(\'is-error\')"></div>';
+  }
+  html += '<div class="field reveal"><div class="label">' + esc(uiAbout['about.field.name']) + '</div><div class="value">' + esc(t('about.name') || about.name || '') + '</div></div>';
+  if (about.subtitle) {
+    html += '<div class="field reveal"><div class="label">' + esc(uiAbout['about.field.title']) + '</div><div class="value sub">' + esc(t('about.subtitle') || about.subtitle) + '</div></div>';
+  }
+  if (about.bio && about.bio.length) {
+    html += '<div class="bio reveal">';
+    about.bio.forEach(function(b, i) {
+      var text = t('about.bio.' + i) || b;
+      if (text) html += '<p>' + esc(text) + '</p>';
+    });
+    html += '</div>';
+  }
+  if (about.quote) {
+    html += '<div class="quote reveal"><p>' + esc(t('about.quote') || about.quote) + '</p>';
+    if (about.quoteAuthor) html += '<span class="sign">' + esc(t('about.quoteAuthor') || about.quoteAuthor) + '</span>';
+    html += '</div>';
+  }
+  html += '</section>';
+
+  /* ===== 2. 艺术理念 ===== */
+  html += '<section class="about-section" id="philosophy">';
+  html += '<h2 class="sec-head reveal">' + esc(uiAbout['about.section.philosophy']) + '</h2>';
+  if (about.philosophy && about.philosophy.length) {
+    about.philosophy.forEach(function(p, i) {
+      var title = t('about.philosophy.' + i + '.title') || p.title || '';
+      var cont = t('about.philosophy.' + i + '.content') || p.content || '';
+      html += '<div class="block reveal"><div class="bt">' + esc(title) + '</div><p>' + esc(cont) + '</p></div>';
+    });
+  }
+  html += '</section>';
+
+  /* ===== 3. 学历与经历 ===== */
+  html += '<section class="about-section" id="experience">';
+  html += '<h2 class="sec-head reveal">' + esc(uiAbout['about.section.experience']) + '</h2>';
+  if (about.background && about.background.length) {
+    about.background.forEach(function(b, i) {
+      var title = t('about.background.' + i + '.title') || b.title || '';
+      var items = b.items || [];
+      html += '<div class="block reveal"><div class="bt">' + esc(title) + '</div>';
+      /* "代表系列" 用 chips 展示，"职业经历" 用 timeline，其他用段落 */
+      if (title.indexOf('系列') >= 0) {
+        html += '<div class="series-chips">';
+        items.forEach(function(item, j) {
+          var text = t('about.background.' + i + '.items.' + j) || item;
+          if (text) html += '<span>' + esc(text) + '</span>';
+        });
+        html += '</div>';
+      } else if (title.indexOf('经历') >= 0 || title.indexOf('职业') >= 0) {
+        html += '<ul class="timeline">';
+        items.forEach(function(item, j) {
+          var text = t('about.background.' + i + '.items.' + j) || item;
+          if (text) {
+            /* 尝试提取年份开头（如 "2015 大学毕业..." → 年份 2015 + 内容） */
+            var m = text.match(/^(\d{4}[-–]?\d{0,4})\s*(.*)/);
+            if (m) {
+              html += '<li><div class="yr">' + esc(m[1]) + '</div><div class="tx">' + esc(m[2]) + '</div></li>';
+            } else {
+              html += '<li><div class="tx">' + esc(text) + '</div></li>';
+            }
+          }
+        });
+        html += '</ul>';
+      } else {
+        /* 教育背景等：逐条段落展示 */
+        items.forEach(function(item, j) {
+          var text = t('about.background.' + i + '.items.' + j) || item;
+          if (text) html += '<p>' + esc(text) + '</p>';
+        });
+      }
+      html += '</div>';
+    });
+  }
+  html += '</section>';
+
+  /* ===== 4. 媒体与评价 ===== */
+  html += '<section class="about-section" id="media">';
+  html += '<h2 class="sec-head reveal">' + esc(uiAbout['about.section.media']) + '</h2>';
+  if (about.recognition) {
+    var rec = about.recognition;
+    if (rec.quote) {
+      html += '<div class="quote reveal"><p>' + esc(t('about.recognition.quote') || rec.quote) + '</p>';
+      if (rec.quoteAuthor) html += '<span class="sign">' + esc(t('about.recognition.quoteAuthor') || rec.quoteAuthor) + '</span>';
+      html += '</div>';
+    }
+    if (rec.items && rec.items.length) {
+      rec.items.forEach(function(item, i) {
+        var title = t('about.recognition.items.' + i + '.title') || item.title || '';
+        var cont = t('about.recognition.items.' + i + '.content') || item.content || '';
+        html += '<div class="block reveal"><div class="bt">' + esc(title) + '</div>';
+        html += '<div class="info-card"><p>' + esc(cont) + '</p></div>';
+        html += '</div>';
+      });
+    }
+  }
+  html += '</section>';
+
+  /* ===== 5. 获奖记录 ===== */
+  html += '<section class="about-section" id="awards">';
+  html += '<h2 class="sec-head reveal">' + esc(uiAbout['about.section.awards']) + '</h2>';
+  if (about.awards && about.awards.length) {
+    about.awards.forEach(function(a, i) {
+      var year = t('about.awards.' + i + '.title') || a.title || '';
+      var items = a.items || [];
+      items.forEach(function(item, j) {
+        var text = t('about.awards.' + i + '.items.' + j) || item;
+        if (text) html += '<div class="award reveal"><div class="ay">' + esc(year) + '</div><div class="at">' + esc(text) + '</div></div>';
+      });
+    });
+  }
+  html += '</section>';
+
+  /* ===== 6. CV与工作室 ===== */
+  html += '<section class="about-section" id="studio">';
+  html += '<h2 class="sec-head reveal">' + esc(uiAbout['about.section.studio']) + '</h2>';
+  /* CV 按钮：有文件则链接下载，否则 toast 提示（小白讲解：按钮文字从 UI_TRANSLATIONS 查询） */
+  if (about.cv && about.cv.file) {
+    html += '<a class="cv-btn reveal" href="' + esc(resolveImg(about.cv.file)) + '" target="_blank">' + esc(uiAbout['button.cv_download']) + '</a>';
+  } else if (about.cv && about.cv.externalUrl) {
+    html += '<a class="cv-btn reveal" href="' + esc(about.cv.externalUrl) + '" target="_blank">' + esc(uiAbout['button.cv_download']) + '</a>';
+  } else {
+    html += '<button class="cv-btn reveal" id="cvBtn">' + esc(uiAbout['button.cv_download']) + '</button>';
+  }
+  /* 工作室描述 */
+  if (about.studio) {
+    var studio = about.studio;
+    if (studio.description) {
+      html += '<div class="block reveal"><div class="bt">' + esc(uiAbout['about.studio.desc']) + '</div><p>' + esc(t('about.studio.description') || studio.description) + '</p></div>';
+    }
+    /* 工作室照片（点击打开通用图片查看器） */
+    if (studio.images && studio.images.length) {
+      html += '<div class="block reveal"><div class="bt">' + esc(uiAbout['about.studio.photos']) + '</div>';
+      html += '<div class="studio-grid">';
+      studio.images.forEach(function(img, idx) {
+        var sir = respImg(img);
+        html += '<div class="ph img-wrap" data-idx="' + idx + '" style="' + lqipStyle(sir.lqip) + '"><img src="' + esc(sir.src) + '" srcset="' + esc(sir.srcset) + '" sizes="' + esc(sir.sizes) + '" alt="工作室 ' + (idx + 1) + '" loading="lazy" decoding="async"></div>';
+      });
+      html += '</div>';
+      html += '<div class="studio-hint">' + esc(uiAbout['hint.studio']) + '<span class="arw">›</span></div>';
+      html += '</div>';
+    }
+  }
+  html += '</section>';
+
+  content.innerHTML = html;
+
+  /* ===== 标签导航：点击平滑滚动到对应 section ===== */
+  var tagEls = tagsBox.querySelectorAll('.about-tag');
+  var sections = content.querySelectorAll('.about-section');
+  tagEls.forEach(function(tag) {
+    tag.addEventListener('click', function() {
+      var id = tag.getAttribute('data-target');
+      var sec = document.getElementById(id);
+      if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  /* ===== 滚动时高亮当前标签（IntersectionObserver） ===== */
+  var navObs = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) {
+        var id = e.target.id;
+        tagEls.forEach(function(tg) { tg.classList.toggle('active', tg.getAttribute('data-target') === id); });
+      }
+    });
+  }, { root: feed, rootMargin: '-32% 0px -58% 0px', threshold: 0 });
+  sections.forEach(function(s) { navObs.observe(s); });
+
+  /* ===== 逐块淡入动画由 playAboutEntrance() 统一处理 =====
+     小白讲解：原来这里直接创建 IntersectionObserver 观察所有 .reveal 元素，
+     但因为视图刚从 display:none 切到 display:block，浏览器可能还没来得及
+     把元素"画"在 opacity:0 的初始状态，导致过渡动画不触发。
+     现在改成由 router → playAboutEntrance() 调用，用双重 requestAnimationFrame
+     确保浏览器先画出初始状态（opacity:0），再添加 .in 类触发过渡动画。
+  */
+
+  /* ===== CV 按钮无文件时 toast 提示（小白讲解：toast 文字从 UI_TRANSLATIONS 查询） ===== */
+  var cvBtn = document.getElementById('cvBtn');
+  if (cvBtn) {
+    cvBtn.addEventListener('click', function() {
+      var toast = document.getElementById('toast');
+      if (toast) {
+        toast.textContent = (UI_TRANSLATIONS[STATE.lang] || UI_TRANSLATIONS.zh)['toast.cv'];
+        toast.classList.add('show');
+        clearTimeout(cvBtn._toastTimer);
+        cvBtn._toastTimer = setTimeout(function() { toast.classList.remove('show'); }, 2200);
+      }
+    });
+  }
+
+  /* ===== 工作室照片点击打开通用图片查看器 openGallery() ===== */
+  var studioGrid = content.querySelector('.studio-grid');
+  if (studioGrid) {
+    var studioImgs = (about.studio && about.studio.images) ? about.studio.images : [];
+    studioGrid.addEventListener('click', function(ev) {
+      var ph = ev.target.closest('.ph');
+      if (ph) {
+        var idx = parseInt(ph.getAttribute('data-idx'), 10) || 0;
+        openGallery(studioImgs, idx, '陈河田工作室', '厦门 · 沙坡尾', true);
+      }
+    });
+  }
+
+  /* ===== 实测 about-bar 高度，写入 --bar-h 变量 ===== */
+  var aboutBarEl = document.getElementById('aboutBar');
+  function updateAboutBarHeight() {
+    if (aboutBarEl) {
+      document.documentElement.style.setProperty('--bar-h', aboutBarEl.offsetHeight + 'px');
+    }
+  }
+  updateAboutBarHeight();
+  window.addEventListener('resize', updateAboutBarHeight);
+  window.addEventListener('load', updateAboutBarHeight);
+  setTimeout(updateAboutBarHeight, 400);
+}
+
+/* ============================================================
+   CONTACT 视图渲染（联系）—— 照抄 contact.html 的轮播逻辑
+   小白讲解：渠道用「轮播卡片」展示，一次只看一张，左右拖拽切换。
+     当前卡清晰聚焦，相邻的卡缩小半透明（景深效果）。下方有圆点导航。
+     邮箱卡有「复制邮箱」按钮，点一下底部弹出 toast 提示。
+     数据从 STATE.site.contact.channels[] 和 collaboration 读取。
+   ============================================================ */
+function render_contact() {
+  if (!STATE.site || STATE.rendered.contact) return;
+  STATE.rendered.contact = true;
+
+  var contact = STATE.site.contact || {};
+  var channels = contact.channels || [];
+
+  /* 1. 六种联系方式图标（微信 / 公众号 / 小红书 / B站 / 邮箱 / 脸书） */
+  var ICON = {
+    wechat: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 4C4.9 4 1.6 6.9 1.6 10.5c0 2.3 1.3 4.3 3.3 5.6L3.8 19l3.9-2.1c.9.2 1.8.3 2.8.3 4.1 0 7.4-3 7.4-6.7C18 6.9 14.6 4 9 4zm-2.4 5.2c.7 0 1.2.5 1.2 1.2 0 .6-.5 1.1-1.2 1.1s-1.2-.5-1.2-1.1c0-.7.5-1.2 1.2-1.2zm4.8 0c.7 0 1.2.5 1.2 1.2 0 .6-.5 1.1-1.2 1.1s-1.2-.5-1.2-1.1c0-.7.5-1.2 1.2-1.2z"/><path d="M22.4 15.8c0-3-2.9-5.4-6.5-5.4-3.7 0-6.6 2.4-6.6 5.4 0 3 2.9 5.4 6.6 5.4.8 0 1.5-.1 2.2-.3l2.9 1.6-.8-2.5c1.6-1.1 2.2-2.7 2.2-4.2zm-8.7-.9c.5 0 .9.4.9.9s-.4.9-.9.9-.9-.4-.9-.9.4-.9.9-.9zm4.4 0c.5 0 .9.4.9.9s-.4.9-.9.9-.9-.4-.9-.9.4-.9.9-.9z"/></svg>',
+    gzh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M8 10h8M8 14h5" stroke-linecap="round"/></svg>',
+    mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M4 7l8 6 8-6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    xhs: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3h11a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3V3z" opacity="0.25"/><path d="M5 3h9v18H8a3 3 0 0 1-3-3V3z"/><path d="M8.5 7h4M8.5 10h4M8.5 13h3" stroke="#0b0b0d" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    bili: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="18" height="13" rx="4"/><path d="M8 7l2-3h4l2 3M8 12v2M16 12v2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    fb: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 8h2.5V5H14c-2.2 0-3.5 1.4-3.5 3.6V11H8v3h2.5v7h3v-7H16l.5-3h-3V9.2c0-.5.3-.7 1-.7z"/></svg>'
+  };
+
+  /* 2. 固定 4 个联系方式（微信 / 小红书 / B站 / 邮箱） */
+  var METHODS = [
+    { key:'wechat',   chType:'wechat',   icon:ICON.wechat, label:'微信',   sub:'扫一扫添加好友', type:'qr'   },
+    { key:'xhs',      chType:'xiaohongshu', icon:ICON.xhs, label:'小红书', sub:'前往主页',       type:'link' },
+    { key:'bilibili', chType:'bilibili', icon:ICON.bili,   label:'B站',    sub:'前往主页',       type:'link' },
+    { key:'email',    chType:'email',    icon:ICON.mail,   label:'邮箱',   sub:'点击复制邮箱',   type:'mail' }
+  ];
+
+  /* 3. 把 site.json 的 channels 按 type 建索引，填充到对应按钮 */
+  var channelByType = {};
+  channels.forEach(function(ch) { if (ch && ch.type) channelByType[ch.type] = ch; });
+
+  function fillMethod(m) {
+    var ch = channelByType[m.chType];
+    var out = {};
+    for (var k in m) out[k] = m[k];
+    if (ch) {
+      // 小白讲解：不再用频道里的 label（如"扫码添加微信好友"/"哲悟空间"）覆盖固定标签，
+      //   联系页只展示统一的图标 + 固定文字（微信/公众号/小红书/B站/邮箱/脸书）。
+      if (m.type === 'qr')   out.qr   = ch.qrImage || '';
+      if (m.type === 'mail') out.addr = ch.value || '';
+      if (m.type === 'link') out.url  = ch.url || '';
+    }
+    return out;
+  }
+
+  var methodsBox = document.getElementById('contactMethods');
+  var displayBox = document.getElementById('cmDisplay');
+
+  /* 4. 去掉顶部 4 个联系方式按钮（卡片内已有图标+名称说明），改用卡片下方圆点指示器 */
+  if (methodsBox) {
+    methodsBox.innerHTML = '';
+    methodsBox.style.display = 'none';
+  }
+
+  /* 构建单个联系方式信息卡（二维码 / 邮箱复制 / 外链） */
+  function methodCardHtml(mm) {
+    var inner = '';
+    if (mm.type === 'qr') {
+      var qrSrc = mm.qr ? resolveImg(mm.qr) : '';
+      var qrR = respImg(mm.qr || '');
+      inner = '<div class="cm-icon">' + mm.icon + '</div>'
+        + '<div class="cm-title">' + esc(mm.label) + '</div>'
+        + (qrR.src ? '<div class="c-qr img-wrap" style="' + lqipStyle(qrR.lqip) + '"><img class="img-fade" src="' + esc(qrR.src) + '" srcset="' + esc(qrR.srcset) + '" sizes="' + esc(qrR.sizes) + '" alt="' + esc(mm.label) + '二维码" loading="lazy" decoding="async" onload="this.classList.add(\'loaded\')" onerror="this.classList.add(\'is-error\')"></div>' : '<div class="cm-note">暂未上传二维码</div>');
+    } else if (mm.type === 'mail') {
+      var copyLabel = (UI_TRANSLATIONS[STATE.lang] || UI_TRANSLATIONS.zh)['button.copy_email'];
+      inner = '<div class="cm-icon">' + mm.icon + '</div>'
+        + '<div class="cm-title">' + esc(mm.label) + '</div>'
+        + '<div class="c-mail"><div class="addr">' + esc(mm.addr || '') + '</div>'
+        + (mm.addr ? '<button class="c-copy" data-addr="' + esc(mm.addr) + '">' + esc(copyLabel) + '</button>' : '') + '</div>';
+    } else {
+      inner = '<div class="cm-icon">' + mm.icon + '</div>'
+        + '<div class="cm-title">' + esc(mm.label) + '</div>'
+        + (mm.url ? '<a class="c-link" href="' + esc(mm.url) + '" target="_blank" rel="noopener">' + esc(mm.label + ' ↗') + '</a>' : '<div class="cm-note">暂未提供主页链接</div>');
+    }
+    return '<div class="cm-card">' + inner + '</div>';
+  }
+
+  /* 5. 可左右滑动的卡片轮播（淡入淡出）+ 卡片下方圆点指示器 */
+  if (displayBox) {
+    displayBox.innerHTML = '<div class="cm-viewport" id="cmViewport"><div class="cm-track" id="cmTrack">'
+      + METHODS.map(function(m, i) {
+          var mm = fillMethod(m);
+          return '<div class="cm-slide' + (i === 0 ? ' active' : '') + '" data-i="' + i + '">' + methodCardHtml(mm) + '</div>';
+        }).join('')
+      + '</div></div>'
+      + '<div class="cm-dots" id="cmDots">'
+      + METHODS.map(function(m, i) {
+          return '<span' + (i === 0 ? ' class="on"' : '') + ' data-i="' + i + '"></span>';
+        }).join('')
+      + '</div>';
+  }
+
+  var contactIndex = 0;
+  var contactCount = METHODS.length;
+  var cmViewport = document.getElementById('cmViewport');
+  var cmTrack = document.getElementById('cmTrack');
+  var cmDots = document.getElementById('cmDots');
+
+  function setContactIndex(i, animate) {
+    i = Math.max(0, Math.min(contactCount - 1, i));
+    contactIndex = i;
+    if (cmTrack) {
+      cmTrack.style.transition = animate ? 'transform .45s cubic-bezier(.22,1,.36,1)' : 'none';
+      cmTrack.style.transform = 'translateX(' + (-i * 100) + '%)';
+    }
+    if (cmTrack) cmTrack.querySelectorAll('.cm-slide').forEach(function(s, idx) {
+      s.classList.toggle('active', idx === i);
+    });
+    // 圆点指示器：当前卡片对应的圆点变实心
+    if (cmDots) cmDots.querySelectorAll('span').forEach(function(d, idx) {
+      d.classList.toggle('on', idx === i);
+    });
+  }
+
+  // 点击圆点也可切换卡片
+  if (cmDots) {
+    cmDots.addEventListener('click', function(ev) {
+      var dot = ev.target.closest('span[data-i]');
+      if (dot) setContactIndex(parseInt(dot.getAttribute('data-i'), 10), true);
+    });
+  }
+
+  /* 鼠标 + 触摸拖拽滑动 */
+  if (cmViewport && cmTrack) {
+    var dragging = false, startX = 0, dx = 0, vpW = 0;
+    function down(e) {
+      dragging = true; startX = (e.touches ? e.touches[0].clientX : e.clientX); dx = 0;
+      vpW = cmViewport.offsetWidth; cmTrack.style.transition = 'none';
+    }
+    function move(e) {
+      if (!dragging) return;
+      var x = (e.touches ? e.touches[0].clientX : e.clientX);
+      dx = x - startX;
+      cmTrack.style.transform = 'translateX(calc(' + (-contactIndex * 100) + '% + ' + dx + 'px))';
+    }
+    function up() {
+      if (!dragging) return; dragging = false;
+      var step = dx / (vpW || 1);
+      if (step <= -0.18) contactIndex++;
+      else if (step >= 0.18) contactIndex--;
+      setContactIndex(contactIndex, true);
+    }
+    cmViewport.addEventListener('mousedown', down);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    cmViewport.addEventListener('touchstart', down, { passive: true });
+    cmViewport.addEventListener('touchmove', move, { passive: true });
+    cmViewport.addEventListener('touchend', up);
+  }
+  setContactIndex(0, false);
+
+  /* 6. 邮箱复制 + toast（事件委托到展示区） */
+  var contactToast = document.getElementById('contactToast');
+  var toastTimer = null;
+  function showToast() {
+    if (!contactToast) return;
+    contactToast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { contactToast.classList.remove('show'); }, 1800);
+  }
+  if (displayBox) {
+    displayBox.addEventListener('click', function(e) {
+      var btn = e.target.closest('.c-copy');
+      if (!btn) return;
+      var addr = btn.getAttribute('data-addr') || '';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(addr).then(showToast, bypassCopy);
+      } else { bypassCopy(); }
+      function bypassCopy() {
+        var ta = document.createElement('textarea'); ta.value = addr; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (err) {}
+        document.body.removeChild(ta); showToast();
+      }
+    });
+  }
+
+  /* 联系方式按钮 + 展示卡逻辑见上方（步骤 1-6）；商业合作区见下方。 */
+
+
+  /* 13. 商业合作区：从 contact.collaboration 生成
+     小白讲解：合作卡片有标题/描述，每张卡有图标 + 标题 + 说明，
+       底部还有一句引言（带署名）。图标按 index%3 取 3 种固定 SVG。 */
+  var coopBox = document.getElementById('coopBox');
+  var coop = contact.collaboration || {};
+  var coopItems = coop.items || [];
+
+  /* 3 种固定 SVG 图标（星标 / 位置标 / 麦克风）—— 照搬 contact.html L233/240/247 */
+  var COOP_ICONS = [
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.2l1-5.8L3.5 9.2l5.9-.9z" stroke-linejoin="round"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke-linecap="round"/></svg>'
+  ];
+
+  /* 小白讲解：商业合作标题随语言切换（优先后端翻译，其次前端内置 coop.title，最后中文）。
+     给 coop-head / coop-grid / coop-quote 加 .reveal 类，让它们进入视口时淡入。 */
+  var coopTitle = t('contact.collaboration.title')
+    || (UI_TRANSLATIONS[STATE.lang] || UI_TRANSLATIONS.zh)['coop.title']
+    || '商业合作';
+  var coopHtml = '<div class="coop-head reveal">';
+  coopHtml += '<span class="cn">' + esc(coopTitle) + '</span>';
+  coopHtml += '<span class="sub">' + esc(t('contact.collaboration.desc') || coop.desc || '欢迎各类合作洽谈') + '</span>';
+  coopHtml += '</div>';
+  if (coopItems.length) {
+    coopHtml += '<div class="coop-grid">';
+    coopItems.forEach(function(item, i) {
+      var title = t('contact.collaboration.items.' + i + '.title') || item.title || '';
+      var content = t('contact.collaboration.items.' + i + '.content') || item.content || '';
+      var iconIdx = i % 3;
+      coopHtml += '<div class="coop-card reveal">';
+      coopHtml += '<div class="ci">' + COOP_ICONS[iconIdx] + '</div>';
+      coopHtml += '<div>';
+      coopHtml += '<div class="ct">' + esc(title) + '</div>';
+      coopHtml += '<div class="cd">' + esc(content) + '</div>';
+      coopHtml += '</div>';
+      coopHtml += '</div>';
+    });
+    coopHtml += '</div>';
+  }
+  if (coop.quote) {
+    /* 小白讲解：quote 和 quoteAuthor 都通过后端翻译查询 */
+    var coopQuote = t('contact.collaboration.quote') || coop.quote || '';
+    var coopQuoteAuthor = t('contact.collaboration.quoteAuthor') || coop.quoteAuthor || '';
+    coopHtml += '<div class="coop-quote reveal">';
+    coopHtml += '<p class="qt">' + esc(coopQuote) + '</p>';
+    if (coopQuoteAuthor) {
+      coopHtml += '<p class="qb">—— ' + esc(coopQuoteAuthor) + '</p>';
+    }
+    coopHtml += '</div>';
+  }
+  coopBox.innerHTML = coopHtml;
+
+  /* 14. 实测 contact-head 高度写入 --bar-h（contact-page 的 padding-top 依赖它）
+     小白讲解：contact-head 是固定吸顶的标题栏，它的高度需要实测后写入 CSS 变量，
+       这样 contact-page 的 padding-top 才能精确避开标题栏，不会遮挡下方卡片。 */
+  function updateContactBarHeight() {
+    var bar = document.getElementById('contactHead');
+    if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px');
+  }
+  updateContactBarHeight();
+  window.addEventListener('resize', updateContactBarHeight);
+  window.addEventListener('load', updateContactBarHeight);
+  setTimeout(updateContactBarHeight, 400);
+
+  /* 15. 底部商业合作区淡入淡出效果（照抄 about 页的 reveal 实现）
+     小白讲解：用 IntersectionObserver 监听 .reveal 元素，进入视口时加 .in 类，
+       CSS 过渡把 opacity 从 0 变到 1，形成滑动时的淡入效果。 */
+  var contactFeed = document.getElementById('contactPage');
+  var contactReveals = coopBox ? coopBox.querySelectorAll('.reveal') : [];
+  if (contactFeed && contactReveals.length) {
+    var contactRevealObs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); contactRevealObs.unobserve(e.target); }
+      });
+    }, { root: contactFeed, threshold: 0.12 });
+    contactReveals.forEach(function(el) { contactRevealObs.observe(el); });
+  }
+}
+
+/* ============================================================
+   通用图片查看器 openGallery()（展览现场图 / 关于工作室照片共用）
+   小白讲解：这个函数像"图片放大镜"。传入一组图片路径和起始位置，
+     就能全屏查看，所有图片按序竖向完整堆叠、可上下滚动查看（已移除左右滑动与景深）。
+   参数：imgs=图片路径数组，idx=起始索引，name=标题，sub=副标题
+   ============================================================ */
+var galleryImgs = [];   // 当前查看的图片列表
+
+function openGallery(imgs, idx, name, sub, isStudio) {
+  if (!imgs || !imgs.length) return;
+  var galleryTrack = document.getElementById('galleryTrack');
+  var galleryOverlay = document.getElementById('galleryOverlay');
+  var galleryClose = document.getElementById('galleryClose');
+  if (!galleryTrack || !galleryOverlay) return;
+
+  galleryImgs = imgs.slice();   // 复制一份，避免修改原数组
+
+  // 渲染标题和副标题
+  var gn = document.getElementById('galleryName');
+  gn.textContent = name || '';
+  gn.classList.toggle('studio', !!isStudio);
+  document.getElementById('gallerySub').textContent = sub || '';
+
+  // 竖向整图堆叠：所有图片按序从上到下完整展示，可上下滚动
+  galleryTrack.innerHTML = galleryImgs.map(function(src) {
+    return '<div class="viewer-slide"><div class="frame"><img src="' + esc(resolveImg(src)) + '" alt=""></div></div>';
+  }).join('');
+
+  galleryOverlay.scrollTop = 0;   // 回到顶部，从第一张开始
+
+  galleryOverlay.classList.add('show');
+  galleryClose.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+
+
+/* 关闭图片查看器 */
+function closeGallery() {
+  var galleryOverlay = document.getElementById('galleryOverlay');
+  var galleryClose = document.getElementById('galleryClose');
+  if (galleryOverlay) galleryOverlay.classList.remove('show');
+  if (galleryClose) galleryClose.classList.remove('show');
+  // 仅当作品详情和视频播放 overlay 都没打开时，才恢复页面滚动
+  if (!document.getElementById('detailOverlay').classList.contains('show') && !document.getElementById('playOverlay').classList.contains('show')) {
+    document.body.style.overflow = '';
+  }
+}
+/* 绑定查看器事件（关闭按钮、空白点击关闭、拖拽滑动） */
+(function bindGalleryEvents() {
+  var overlay = document.getElementById('galleryOverlay');
+  var closeBtn = document.getElementById('galleryClose');
+  if (!overlay || !closeBtn) return;
+  closeBtn.addEventListener('click', closeGallery);
+  // 点击空白区域（overlay 自身或 viewer 两侧留白）关闭，点击图片不关闭
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay || (e.target.classList && e.target.classList.contains('viewer'))) closeGallery();
+  });
+})();
+
+
+/* ============================================================
+   关于页面入场动画（每次进入关于页面时播放）
+   小白讲解：照抄 about.html 的做法——
+     1. 先把 about-bar（页头标题+标签栏）和所有 .reveal 元素重置到
+        opacity:0 的初始状态（肉眼看不见）。
+     2. 用双重 requestAnimationFrame 确保浏览器先把初始状态"画"出来。
+        为什么要两次？第一次 rAF 是等当前帧画完，第二次 rAF 是等下一帧
+        画完——这样浏览器一定已经把 opacity:0 的样子画到屏幕上了。
+     3. 然后再让 about-bar 滑下来（opacity:0→1 + translateY），同时
+        用 IntersectionObserver 让可视区域内的 .reveal 元素逐个淡入。
+     这样每次点进"关于"页面，文字和图片都会有淡入淡出的动效，
+     和独立的 about.html 页面效果一模一样。
+   ============================================================ */
+function playAboutEntrance() {
+  var aboutBar = document.getElementById('aboutBar');
+  var aboutContent = document.getElementById('aboutContent');
+  var feed = document.getElementById('aboutFeed');
+
+  /* --- 第 1 步：重置到初始状态（opacity:0） --- */
+  if (aboutBar) {
+    aboutBar.style.transition = 'none';
+    aboutBar.style.opacity = '0';
+    aboutBar.style.transform = 'translateX(-50%) translateY(-10px)';
+  }
+  var reveals = aboutContent ? aboutContent.querySelectorAll('.reveal') : [];
+  reveals.forEach(function(el) { el.classList.remove('in'); });
+
+  /* --- 第 2 步：双重 rAF 确保浏览器画出了初始状态 --- */
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+
+      /* --- 第 3 步：让 about-bar 滑下来 --- */
+      if (aboutBar) {
+        aboutBar.style.transition = 'opacity .6s ease .15s, transform .6s ease .15s';
+        aboutBar.style.opacity = '1';
+        aboutBar.style.transform = 'translateX(-50%) translateY(0)';
+      }
+
+      /* --- 第 4 步：用 IntersectionObserver 让 .reveal 元素逐个淡入 ---
+         小白讲解：IntersectionObserver 就像一个"哨兵"，当某个元素滚动
+         进可视区域时，它就报告"这个元素看见了！"，然后我们给该元素
+         加上 .in 类，CSS 过渡就会把 opacity 从 0 变到 1，形成淡入效果。
+      */
+      if (feed && reveals.length) {
+        var revealObs = new IntersectionObserver(function(entries) {
+          entries.forEach(function(e) {
+            if (e.isIntersecting) { e.target.classList.add('in'); revealObs.unobserve(e.target); }
+          });
+        }, { root: feed, threshold: 0.12 });
+        reveals.forEach(function(el) { revealObs.observe(el); });
+      }
+    });
+  });
+}
+
+/* ============================================================
+   页面名称多语言：顶栏页面标签 / 作品·视频 Tab / 底部导航共用。
+   小白讲解：页面名称（首页/作品/视频/展览/关于/联系）需要随语言切换，
+     复用前端内置翻译表 UI_TRANSLATIONS 的 menu.* 键；查不到回退中文。
+   ============================================================ */
+function pageLabelText(route) {
+  var zhLabels = {
+    home: '首页', works: '作品', exhibitions: '展览',
+    videos: '视频', about: '关于', contact: '联系'
+  };
+  // 中文模式直接用中文（注意：UI_TRANSLATIONS.zh 的 menu.* 存的是英文副标题，不能用于页面标签）
+  if (STATE.lang === 'zh') return zhLabels[route] || '首页';
+  var ui = UI_TRANSLATIONS[STATE.lang] || UI_TRANSLATIONS.zh;
+  var keyMap = {
+    home: 'menu.home', works: 'menu.works', exhibitions: 'menu.exhibitions',
+    videos: 'menu.videos', about: 'menu.about', contact: 'menu.contact'
+  };
+  return (ui && ui[keyMap[route]]) || zhLabels[route] || '首页';
+}
+
+/* ============================================================
+   hash 路由核心
+   小白讲解：监听浏览器地址栏 # 后面的内容，根据它显示对应视图。
+     比如 #/works 就显示作品视图，#/about 就显示关于视图。
+   ============================================================ */
+function router() {
+  var hash = location.hash || '#/home';
+  var route = hash.replace(/^#\/?/, '');  // 去掉 #/ 前缀
+  var views = ['home', 'works', 'exhibitions', 'videos', 'about', 'contact'];
+  if (views.indexOf(route) === -1) route = 'home';
+
+  // 视频页并入「作品」页（共用 view-works，仅切换内部标签）
+  var activeViewId = (route === 'videos') ? 'view-works' : 'view-' + route;
+
+  // 切换视图显示
+  views.forEach(function(v) {
+    var el = document.getElementById('view-' + v);
+    if (el) el.classList.toggle('active', ('view-' + v) === activeViewId);
+  });
+
+  // 顶栏页面标签 + 底部悬浮导航高亮（页面名称随语言翻译）
+  var navRoute = (route === 'videos') ? 'works' : route;
+  if (pageLabel) pageLabel.textContent = pageLabelText(route);
+  if (bottomNav) bottomNav.querySelectorAll('.nav-btn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-route') === navRoute);
+  });
+  // 作品 / 视频 路由：顶栏改为 作品/视频 标签，隐藏页面标签文字
+  var topTabs = document.getElementById('topTabs');
+  if (route === 'works' || route === 'videos') {
+    if (pageLabel) pageLabel.style.display = 'none';
+    if (topTabs) topTabs.style.display = 'flex';
+  } else {
+    if (pageLabel) pageLabel.style.display = '';
+    if (topTabs) topTabs.style.display = 'none';
+  }
+
+  // 触发视图渲染（按需渲染，只渲染一次，切换语言时清空标记重新渲染）
+  var renderFn = window['render_' + route];
+  if (renderFn) renderFn();
+  // 作品 / 视频 共用一个视图，确保两个面板都已渲染并就位
+  if (route === 'works' || route === 'videos') {
+    render_works();
+    render_videos();
+    setWorksTab(route === 'videos' ? 'videos' : 'works');
+  }
+
+  // 小白讲解：进入关于页面时播放入场动画（about-bar 滑下 + 文字图片逐块淡入）。
+  //   放在 renderFn() 之后，确保内容已渲染到 DOM 中再触发动画。
+  if (route === 'about') {
+    playAboutEntrance();
+  }
+
+  // 小白讲解：如果是首页且有背景视频，延时重试播放。
+  //   首次加载时浏览器可能阻止视频自动播放，切回首页时主动重试一次。
+  if (route === 'home' && heroVideoEl) {
+    setTimeout(function() {
+      if (heroVideoEl.paused) {
+        var p = heroVideoEl.play();
+        if (p && p.catch) p.catch(function() {});
+      }
+    }, 150);
+  }
+
+  // 小白讲解：每次切换视图都重新实测当前页面的 bar 高度写入 --bar-h。
+  //   因为 --bar-h 是全局变量被多个页面共用，切换页面时如果不去更新它，
+  //   上一页面的 bar 高度会残留，导致当前页面的 padding-top 不准确，
+  //   出现卡片被标签栏遮挡或顶部透图的问题。
+  requestAnimationFrame(function() {
+    var barIdMap = {
+      works: 'worksSubbar',
+      videos: 'worksSubbar',
+      exhibitions: 'exhBar',
+      about: 'aboutBar'
+    };
+    var barEl = document.getElementById(barIdMap[route]);
+    if (barEl) {
+      document.documentElement.style.setProperty('--bar-h', barEl.offsetHeight + 'px');
+    }
+  });
+
+  // 滚动到顶部（非首页时）
+  if (route !== 'home') {
+    var activeView = document.getElementById(activeViewId);
+    if (activeView) {
+      var scrollEl = activeView.querySelector('.works-scroller, .exh-page, .about-feed, .contact-page');
+      if (scrollEl) scrollEl.scrollTop = 0;
+    }
+  }
+
+  // 背景层统一使用 CSS 默认浅色径向渐变（作品页/视频页不再显示单独上传的背景图）。
+}
+
+window.addEventListener('hashchange', router);
+
+/* ============================================================
+   初始化
+   ============================================================ */
+function init() {
+  updateTopbar();
+
+  // 小白讲解：添加 page-in 类，触发顶栏、标签栏、背景层的入场动画。
+  //   CSS 里很多元素（series-bar / exh-bar / video-bar / about-bar）默认 opacity:0，
+  //   只有 body 有 page-in 类时才显示。之前漏加这个类，导致作品标签栏看不见。
+  document.body.classList.add('page-in');
+
+  // 加载数据
+  loadData(function() {
+    // 隐藏加载状态
+    var loading = document.getElementById('loadingState');
+    if (loading) loading.style.display = 'none';
+
+    // 渲染语言列表（根据用户在管理后台选择的语言动态生成）
+    renderLangList();
+    // 恢复上次选择的语言（如果该语言还在已选列表里）
+    restoreSavedLang();
+    // 更新静态文字
+    updateStaticText();
+
+    // 如果没有 hash，默认首页
+    if (!location.hash) {
+      location.hash = '#/home';
+    } else {
+      router();
+    }
+
+    // 首页拉灯开场动效（仅当在首页且首次访问时播放）
+    var isHome = (location.hash === '#/home' || location.hash === '');
+    var lampSeen = false;
+    try { lampSeen = sessionStorage.getItem('lamp-played'); } catch(e) {}
+    if (isHome && !lampSeen) {
+      try { sessionStorage.setItem('lamp-played', '1'); } catch(e) {}
+      // 先渲染首页内容
+      render_home();
+      // 播放拉灯开场（点击拉绳 → 灯泡亮 → 黑幕上滑 → 首页下滑出现）
+      requestAnimationFrame(function() {
+        setTimeout(playLampIntro, 200);
+      });
+    } else {
+      // 不是首次访问，直接隐藏拉灯黑幕
+      if (lampIntro) lampIntro.classList.add('gone');
+      hero.classList.add('reveal-content');
+      // 渲染当前视图
+      router();
+      // 如果在首页，手动触发标题动画
+      if (isHome) {
+        setTimeout(function() {
+          workTitle.classList.add('shown');
+          hero.classList.add('show-cue', 'show-actions');
+        }, 300);
+        // 主动播放背景视频（非首次访问场景）
+        if (heroVideoTryPlay) heroVideoTryPlay();
+      }
+    }
+  });
+
+  // 窗口大小变化时重新计算顶栏高度
+  window.addEventListener('resize', function() { updateTopbar(); });
+  setTimeout(function() { updateTopbar(); }, 400);
+}
+
+if (document.readyState === 'complete') {
+  init();
+} else {
+  window.addEventListener('load', init);
+}
+</script>
+</body>
+</html>
